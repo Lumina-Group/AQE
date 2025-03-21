@@ -45,7 +45,8 @@ class SecureTransport:
         self.logger = EnhancedSecurityLogger(logger, self.security_metrics).logger
         
         # 初期鍵セットの生成
-        self.current_key, self.current_salt = self._derive_key(initial_key)
+        self.current_key = initial_key
+        self.current_salt = None
         self.key_chain = [{
             'key': self.current_key,
             'salt': self.current_salt,
@@ -149,21 +150,20 @@ class SecureTransport:
         if needs_rotation:
             await self.rotate_key()
             return True
-        return False
-
+        return False    
     async def rotate_key(self):
         """
         鍵をローテーションします。
-        
+
         このメソッドは以下の処理を行います：
         1. 鍵チェーンの長さが最大値に達している場合、最も古い鍵を削除
         2. 現在の鍵から新しい鍵を派生
         3. 鍵チェーンに新しい鍵を追加
         4. リプレイ保護ウィンドウをリセット
-        
+
         セキュリティのため、定期的に鍵をローテーションすることで、
         万が一鍵が漏洩した場合のリスクを最小限に抑えます。
-        
+
         Returns:
             なし
         """
@@ -171,11 +171,11 @@ class SecureTransport:
         if len(self.key_chain) >= self.max_key_chain_length:
             removed_key = self.key_chain.pop(0)
             self.logger.debug(f"Removed oldest key {removed_key['id']}, chain length: {len(self.key_chain)}")
-            
+
         # 新しい鍵を生成（現在の鍵から派生）
         new_key, new_salt = self._derive_key(self.current_key)
         new_key_id = hashlib.sha256(new_key).hexdigest()[:8]
-        
+
         # 鍵チェーンに追加
         new_key_data = {
             'key': new_key,
@@ -185,16 +185,16 @@ class SecureTransport:
             'id': new_key_id
         }
         self.key_chain.append(new_key_data)
-        
+
         self.current_key = new_key
         self.current_salt = new_salt
-        
+
         # 鍵同期状態を更新
         self.key_sync_state['pending_rotations'].add(new_key_id)
-        
+
         # セキュリティイベントとしてログに記録
         self.logger.info(f"Key rotated. New key {new_key_id} added. Chain size: {len(self.key_chain)}")
-        
+
         # リプレイ保護ウィンドウをリセット
         self.sequence_window.clear()
         self.last_valid_seq = self.sequence
@@ -243,6 +243,7 @@ class SecureTransport:
         # ノンス生成 (sequence + random)
         random_bytes = os.urandom(4)  
         nonce = seq_bytes[-8:] + random_bytes
+       
         
         # 追加認証データ (AAD) の構築
         # sequence + key_version + timestamp + context
@@ -253,6 +254,7 @@ class SecureTransport:
         if context_data:
             context_hash = hashlib.sha256(context_data).digest()[:8]
             aad += context_hash
+        #print(len(key))
         
         # 暗号化
         try:

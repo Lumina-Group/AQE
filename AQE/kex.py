@@ -232,8 +232,9 @@ class QuantumSafeKEX:
             salt = hasher.finalize()[:32]
             
             # 最終的な共有秘密の導出
-            hkdf = HKDF(algorithm=hashes.SHA512(), length=64, salt=salt, info=b'hybrid-kex-v4')
+            hkdf = HKDF(algorithm=hashes.SHA512(), length=32, salt=salt, info=b'hybrid-kex-v4')
             shared_secret = hkdf.derive(ec_shared + pq_shared)
+            print(len(shared_secret))
 
             # 成功ログ
             await self._log_security_event("LOW", "KEX_SUCCESS", "Key exchange successful")
