@@ -109,7 +109,7 @@ class SecureTransport:
         
         # 時間情報を追加
         timestamp = struct.pack(">Q", int(time.time()))
-        info = version_tag + b'|' + b'|' + timestamp
+        info = version_tag + b'|' + timestamp
         
         # HKDF設定
         key_size = self.config_manager.getint("security", "KEY_SIZE", fallback=32)
