@@ -1,6 +1,7 @@
 # AQE: Anti-Quantum Encryption
-[日本語](/README_JA.md)
 **AQE** is a next-generation quantum-resistant encryption library designed for the post-quantum era. While conventional cryptographic libraries face the risk of being broken by quantum computers, AQE provides practical protection that is available right now.
+
+[日本語](/README_JA.md)
 
 ---
 
