@@ -1,27 +1,27 @@
-# AQE: 量子暗号 (Anti-Quantum Encryption)
+# AQE: Anti-Quantum Encryption
+**AQE** is a next-generation quantum-resistant encryption library designed for the post-quantum era. While conventional cryptographic libraries face the risk of being broken by quantum computers, AQE provides practical protection that is available right now.
 
-**AQE** は、ポスト量子時代に向けた次世代の量子耐性暗号ライブラリです。
-従来の暗号ライブラリが量子コンピュータによって破られるリスクを抱えているのに対し、AQE は今すぐ実用可能な保護を提供します。
-
----
-
-## 🚀 AQE の特長
-
-| 機能 | AQE | 従来の暗号ライブラリ | 他のポスト量子暗号ライブラリ |
-|------|-----|------------------|------------------|
-| **量子耐性** | ✅ 完全なハイブリッド保護 | ❌ 量子攻撃に脆弱 | ⚠️ 部分的な保護 |
-| **パフォーマンス** | ✅ 実用向けに最適化 | ✅ 高速 | ❌ 遅く、扱いにくい |
-| **使いやすさ** | ✅ シンプルな API | ⚠️ 設定が複雑 | ❌ 実験的なインターフェース |
-| **ハイブリッド暗号** | ✅ 既存技術との併用 | ❌ 従来暗号のみ | ⚠️ 限定的なハイブリッド化 |
-| **自動キー管理** | ✅ ローテーションとライフサイクル管理 | ❌ 手動管理が必要 | ⚠️ 基本的な管理のみ |
-| **包括的なセキュリティ** | ✅ 多層防御 | ⚠️ アルゴリズム中心 | ⚠️ 限定的な防御 |
+[日本語](/README_JA.md)
 
 ---
 
-## 🛡️ 量子対応の保護
+## 🚀 Key Features of AQE
+
+| Feature                  | AQE                                | Conventional Encryption Libraries    | Other Post-Quantum Encryption Libraries |
+|--------------------------|------------------------------------|--------------------------------------|-----------------------------------------|
+| **Quantum Resistance**   | ✅ Complete hybrid protection      | ❌ Vulnerable to quantum attacks     | ⚠️ Partial protection                   |
+| **Performance**          | ✅ Optimized for practical use     | ✅ High-speed                        | ❌ Slow and cumbersome                  |
+| **Ease of Use**          | ✅ Simple API                      | ⚠️ Complex configuration required    | ❌ Experimental interfaces              |
+| **Hybrid Encryption**    | ✅ Combines existing techniques    | ❌ Traditional cryptography only     | ⚠️ Limited hybridization                |
+| **Automatic Key Management** | ✅ Supports key rotation and lifecycle management | ❌ Requires manual management | ⚠️ Basic management only           |
+| **Comprehensive Security**  | ✅ Multi-layer defense             | ⚠️ Algorithm-focused                 | ⚠️ Limited defenses                     |
+
+---
+
+## 🛡️ Quantum-Ready Protection
 
 ```python
-# たった数行で量子耐性暗号を生成
+# Generate quantum-resistant encryption in just a few lines
 kex = QuantumSafeKEX()
 transport = SecureTransport(await kex.exchange(peer_awa)[0])
 encrypted = await transport.encrypt(your_data)
@@ -29,44 +29,45 @@ encrypted = await transport.encrypt(your_data)
 
 ---
 
-## 🔑 主な機能
+## 🔑 Main Features
 
-- **量子耐性暗号**：NIST PQC 最終候補 (Kyber1024, Dilithium3) を実装
-- **ハイブリッド暗号**：従来の ECC (X25519) と PQC を組み合わせた防御
-- **自動鍵管理**：設定可能な間隔での鍵のローテーションと管理
-- **高速パフォーマンス**：ChaCha20-Poly1305 による高速暗号化
-- **前方秘匿性**：キーの自動ローテーションで漏洩リスクを最小化
-- **強力な攻撃対策**：
-  - タイミング攻撃防御
-  - サイドチャネル耐性
-  - リプレイ攻撃防止
-  - 改ざん検知機能
-
----
-
-## 📊 パフォーマンス設計
-
-- **効率的な鍵交換**：Kyber1024 と X25519 のハイブリッド方式
-- **高速な暗号化**：ChaCha20-Poly1305 による効率的なデータ保護
-- **最適化された実装**：重要な処理での非同期操作のサポート
+- **Quantum-Resistant Encryption**: Implements NIST PQC final candidates (Kyber1024, Dilithium3).
+- **Hybrid Encryption**: Combines traditional ECC (X25519) with post-quantum cryptography.
+- **Automatic Key Management**: Configurable key rotation and management at set intervals.
+- **High-Speed Performance**: Efficient data protection via ChaCha20-Poly1305 encryption.
+- **Forward Secrecy**: Minimizes risk of key compromise through automatic key rotation.
+- **Robust Attack Protections**:
+  - Defense against timing attacks
+  - Side-channel resistance
+  - Replay attack prevention
+  - Tamper detection
 
 ---
 
-## 💻 インストール方法
+## 📊 Performance Design
 
-### 必要環境
+- **Efficient Key Exchange**: Hybrid method using Kyber1024 and X25519.
+- **Fast Encryption**: Efficient data protection with ChaCha20-Poly1305.
+- **Optimized Implementation**: Support for asynchronous operations in critical processes.
+
+---
+
+## 💻 Installation
+
+### Requirements
 * Python 3.7+
-* liboqs - Open Quantum Safe ライブラリ
+* liboqs - Open Quantum Safe library
 * pycryptodome
 * cryptography
+
 ```bash
-# AQE をインストール
+# Install AQE
 pip install AQE
 ```
 
 ---
 
-## 🚦 簡単な使用例
+## 🚦 Simple Usage Example
 
 ```python
 import asyncio
@@ -78,7 +79,7 @@ async def secure_communication():
     transport = SecureTransport(await kex.exchange(peer_awa)[0])
     encrypted = await transport.encrypt(b"Hello, Quantum World!")
     decrypted = await transport.decrypt(encrypted)
-    print("復号化されたメッセージ:", decrypted)
+    print("Decrypted message:", decrypted)
 
 if __name__ == "__main__":
     asyncio.run(secure_communication())
@@ -86,47 +87,48 @@ if __name__ == "__main__":
 
 ---
 
-## 🔧 設定オプション
+## 🔧 Configuration Options
 
 ```ini
 [kex]
-KEX_ALG = Kyber1024  # NIST PQC 最終候補
-EPHEMERAL_KEY_LIFETIME = 3600  # 1 時間ごとに鍵をローテーション
+KEX_ALG = Kyber1024  # NIST PQC final candidate
+EPHEMERAL_KEY_LIFETIME = 3600  # Rotate key every 1 hour
 
 [signature]
-SIG_ALG = Dilithium3  # NIST PQC 最終候補
-SIG_VERIFY_TIMEOUT = 5  # タイミング攻撃防止
+SIG_ALG = Dilithium3  # NIST PQC final candidate
+SIG_VERIFY_TIMEOUT = 5  # Prevent timing attacks
 
 [security]
-KEY_ROTATION_INTERVAL = 1000  # 1000 メッセージごとに鍵交換
-TIMESTAMP_WINDOW = 300  # リプレイ攻撃防止（秒）
+KEY_ROTATION_INTERVAL = 1000  # Exchange key every 1000 messages
+TIMESTAMP_WINDOW = 300  # Prevent replay attacks (in seconds)
 ```
 
 ---
 
-## 🏢 業界別の活用事例
+## 🏢 Industry Use Cases
 
-- **金融**：量子耐性プロトコルで取引を保護
-- **医療**：患者データを将来にわたって安全に管理
-- **政府機関**：ポスト量子規制要件に対応
-- **IoT**：軽量かつ強力な暗号技術を適用
-- **軍事/防衛**：ミッション・クリティカルなシステムを保護
-
----
-
-## 🤝 商用サポート
-
-企業向けのサポートも提供しています。  
-詳細は `example.example.1.mm@icloud.com` までお問い合わせください。
+- **Finance**: Protect transactions with quantum-resistant protocols.
+- **Healthcare**: Secure patient data for the long term.
+- **Government Agencies**: Comply with post-quantum regulatory requirements.
+- **IoT**: Apply lightweight yet robust encryption techniques.
+- **Military/Defense**: Safeguard mission-critical systems.
 
 ---
 
-## 🤝 コントリビューション
+## 🤝 Commercial Support
 
-プロジェクトへの貢献を歓迎します。issuesの報告や機能リクエスト、プルリクエストなどお待ちしています。
+Commercial support for enterprises is also available.  
+For more details, please contact: `example.example.1.mm@icloud.com`.
 
 ---
 
-## 📝 ライセンス
+## 🤝 Contributions
 
-Apache License 2.0 - 詳細は [LICENSE](LICENSE) を参照してください。
+Contributions to the project are welcome.  
+Feel free to report issues, request features, or submit pull requests.
+
+---
+
+## 📝 License
+
+Apache License 2.0 - For details, see [LICENSE](LICENSE).

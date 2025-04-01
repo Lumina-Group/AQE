@@ -38,15 +38,15 @@ async def initialize_secure_communication(config_file="config.ini"):
 
     # --- ここから鍵交換のシミュレーション ---
     logger.info("Simulating key exchange between Alice and Bob")
-    alice_shared_secret, ciphertext = await alice_kex.exchange(bob_awa)
-    logger.debug(f"Alice's shared secret: {alice_shared_secret}")
+    shared_secret, ciphertext = await alice_kex.exchange(bob_awa)
+    logger.debug(f"shared secret: {shared_secret}")
     logger.debug(f"Ciphertext from key exchange: {ciphertext}")
     # ----------------------------------------------------------------
 
     # 共有秘密鍵を初期鍵として利用して、SecureTransport を初期化します。
     logger.debug("Initializing SecureTransport for Alice")
-    alice_transport = SecureTransport(initial_key=alice_shared_secret, config_manager=config)
-    bob_transport = SecureTransport(initial_key=alice_shared_secret, config_manager=config)
+    alice_transport = SecureTransport(initial_key=shared_secret, config_manager=config)
+    bob_transport = SecureTransport(initial_key=shared_secret, config_manager=config)
 
     # --- メッセージの暗号化／復号のシミュレーション ---
     logger.info("Simulating message encryption and decryption")
@@ -54,6 +54,7 @@ async def initialize_secure_communication(config_file="config.ini"):
      # Alice がメッセージを暗号化します
      plaintext_message = b"Hello, Quantum World!"
      encrypted_message = await alice_transport.encrypt(plaintext_message)
+     print(f"{encrypted_message} encrypted")
 
 
      # Bob が受信したメッセージを復号化します

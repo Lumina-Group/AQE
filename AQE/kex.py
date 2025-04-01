@@ -113,8 +113,6 @@ class QuantumSafeKEX:
         1. 公開鍵データの完全性チェック
         2. タイムスタンプの有効性検証（リプレイ攻撃対策）
         3. 公開鍵フォーマットの検証
-        4. クライアントIDが指定された場合は、許可リストとの照合と署名の検証
-        
         Args:
             peer_pub: ピアの公開鍵データ（タイムスタンプ、公開鍵、署名を含む）
             
@@ -234,7 +232,7 @@ class QuantumSafeKEX:
             # 最終的な共有秘密の導出
             hkdf = HKDF(algorithm=hashes.SHA512(), length=32, salt=salt, info=b'hybrid-kex-v4')
             shared_secret = hkdf.derive(ec_shared + pq_shared)
-            print(len(shared_secret))
+            #print(len(shared_secret))
 
             # 成功ログ
             await self._log_security_event("LOW", "KEX_SUCCESS", "Key exchange successful")

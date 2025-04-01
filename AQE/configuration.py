@@ -7,12 +7,6 @@ class ConfigurationManager:
     設定ファイルが存在しない場合はデフォルト設定で新しいファイルを作成します。
     """
     DEFAULT_CONFIG = {
-        "server": {
-            "HOST": "0.0.0.0",
-            "PORT": "4433",
-            "MAX_CONNECTIONS": "1000",
-            "BACKLOG_SIZE": "100"
-        },
         "kex": {
             "KEX_ALG": "Kyber1024",
             "EPHEMERAL_KEY_LIFETIME": "3600"
@@ -83,9 +77,6 @@ class ConfigurationManager:
         logging.info(f"Configuration saved to {self.config_file}")
 
     def _validate_configuration(self):
-        port = self.config.getint("server", "PORT")
-        if not (0 < port < 65536):
-            raise ValueError(f"Invalid port number: {port}")
         for section in ["timeouts", "security"]:
             for option in self.config.options(section):
                 value = self.config.getint(section, option)

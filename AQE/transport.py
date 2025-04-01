@@ -266,7 +266,7 @@ class SecureTransport:
             message = {
                 'nonce': base64.b64encode(nonce).decode(),
                 'aad': base64.b64encode(aad).decode(),
-                'ciphertext': base64.b64encode(ciphertext).decode(),
+                'ciphertext': f"""{base64.b64encode(ciphertext).decode()}""",
                 'tag': base64.b64encode(tag).decode(),
                 'key_version': key_version,
                 'timestamp': int(time.time())

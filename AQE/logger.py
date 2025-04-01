@@ -3,7 +3,7 @@ import asyncio
 import time
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from .errors import ErrorSeverity
 
 class SecurityEvent:
