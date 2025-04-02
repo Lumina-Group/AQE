@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 # バージョン情報を取得
-with open("AQE/__init__.py", "r") as f:
+with open("AQE/__init__.py", "r",encoding="utf-8") as f:
     for line in f:
         if line.startswith("__version__"):
             version = line.split("=")[1].strip().strip('"').strip("'")
