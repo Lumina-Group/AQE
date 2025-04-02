@@ -128,9 +128,4 @@ TIMESTAMP_WINDOW = 300  # リプレイ攻撃防止（秒）
 ---
 
 ## 📝 ライセンス
-
-<<<<<<< HEAD
 Apache License 2.0 - 詳細は [LICENSE](LICENSE) を参照してください。
-=======
-Apache License 2.0 - 詳細は [LICENSE](LICENSE) を参照してください。
->>>>>>> 3dc4d4b58dacb3581b0a49034cb2a4363edb2b8e

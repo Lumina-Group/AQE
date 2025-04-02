@@ -130,9 +130,4 @@ Feel free to report issues, request features, or submit pull requests.
 ---
 
 ## 📝 License
-
-<<<<<<< HEAD
 Apache License 2.0 - For details, see [LICENSE](LICENSE).
-=======
-Apache License 2.0 - For details, see [LICENSE](LICENSE).
->>>>>>> 3dc4d4b58dacb3581b0a49034cb2a4363edb2b8e
