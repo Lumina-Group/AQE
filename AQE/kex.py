@@ -5,22 +5,22 @@ from typing import Tuple, Dict, Any
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from .errors import AuthenticationError, ReplayAttackError, SignatureVerificationError
+from .errors import AuthenticationError, HandshakeTimeoutError, RateLimitExceededError, ReplayAttackError, SignatureVerificationError
 from .logger import SecurityEvent, EnhancedSecurityLogger, SecurityMetrics, setup_logging
 from .configuration import ConfigurationManager
 from oqs import KeyEncapsulation, Signature
-
-
 
 class QuantumSafeKEX:
     def __init__(
         self,
         identity_key=None,
         kyber_keypair=None,
-        ec_priv_public_raw=None,
+        ec_priv_public_raw=None, 
         awa=None,
         sig_keypair=None,
-        config_manager: ConfigurationManager = None
+        config_manager: ConfigurationManager = None,
+        logger: EnhancedSecurityLogger = None,
+        is_initiator: bool = True
     ):
         """
         量子耐性のある鍵交換プロトコルの実装クラスを初期化します。
@@ -33,15 +33,25 @@ class QuantumSafeKEX:
             awa: 既存の認証データ（Authentication and Whitelisting Assertion）。指定されていない場合は生成されます。
             sig_keypair: 署名鍵ペア。指定されていない場合は新しく生成されます。
             config_manager: 設定を管理するConfigurationManagerのインスタンス。指定されていない場合は新しく生成されます。
+            logger: 拡張されたセキュリティロガーのインスタンス。指定されていない場合は新しく生成されます。
+            is_initiator: 鍵交換の初期化者かどうかを示す値。
 
         Returns:
             なし
         """
         self.config_manager = config_manager or ConfigurationManager()
         self.metrics = SecurityMetrics()
-        self.enhanced_logger = EnhancedSecurityLogger(setup_logging(), self.metrics)
+        self.enhanced_logger = logger or EnhancedSecurityLogger(setup_logging(), self.metrics)
         self.logger = self.enhanced_logger.logger
-        
+        self.max_failed_attempts = self.config_manager.getint("security", "MAX_FAILED_ATTEMPTS", fallback=5)
+        self.rate_limit_window = self.config_manager.getint("security", "RATE_LIMIT_WINDOW", fallback=300)
+        self.is_initiator = is_initiator
+        self.failed_attempts = 0
+        self.last_failed_time = 0
+
+        # 鍵ローテーションチェック間隔
+        self.key_rotation_check_interval = self.config_manager.getint("keys", "KEY_ROTATION_CHECK_INTERVAL", fallback=60)
+        self.last_rotation_check = 0
         self.ec_priv = identity_key or x25519.X25519PrivateKey.generate()
         self.kyber = KeyEncapsulation(self.config_manager.get("kex", "KEX_ALG"), None)
         self.signer = Signature(self.config_manager.get("signature", "SIG_ALG"),None )
@@ -62,11 +72,10 @@ class QuantumSafeKEX:
         """
         AWA (Authentication and Whitelisting Assertion) を生成します。
         AWAは認証と許可リストに基づいたアサーションであり、以下の要素を含みます：
-        - タイムスタンプ
-        - 楕円曲線公開鍵
-        - 格子ベース公開鍵
-        - これらのデータに対する署名
-
+        - タイムスタンプ：AWAの生成時刻（Unixタイムスタンプ形式）
+        - EC公開鍵：ECDSA（Elliptic Curve Digital Signature Algorithm）の公開鍵
+        - PQ公開鍵：Kyber（Post-Quantum Key Encapsulation Mechanism）の公開鍵
+        - 署名：ECDSAで生成された署名（タイムスタンプ + EC公開鍵 + PQ公開鍵を署名対象とする）
         Returns:
             bytes: 生成されたAWAバイト列
         """
@@ -88,6 +97,10 @@ class QuantumSafeKEX:
         Returns:
             なし
         """
+        current_time = time.time()
+        if current_time - self.last_rotation_check < self.key_rotation_check_interval:
+            return
+        self.last_rotation_check = current_time
         elapsed_time = time.time() - self.awa_timestamp
         if elapsed_time > self.config_manager.getint("kex", "EPHEMERAL_KEY_LIFETIME"):
             self.awa = self._generate_awa()
@@ -123,9 +136,21 @@ class QuantumSafeKEX:
             AuthenticationError: 認証エラーが発生した場合
             ReplayAttackError: リプレイ攻撃が検出された場合
             SignatureVerificationError: 署名検証に失敗した場合
+            RateLimitExceededError: レート制限を超えた場合
         """
+        current_time = time.time()
+        if self.failed_attempts >= self.max_failed_attempts:
+            if current_time - self.last_failed_time < self.rate_limit_window:
+                await self._log_security_event("CRITICAL", "RATE_LIMIT_EXCEEDED", 
+                    f"Maximum failed attempts ({self.max_failed_attempts}) reached. Blocking for {self.rate_limit_window} seconds.")
+                raise RateLimitExceededError("Too many failed authentication attempts")
+            else:
+                # ウィンドウ時間経過後はリセット
+                self.failed_attempts = 0
+                self.last_failed_time = 0
+
         try:
-                
+               
             sig_length = self.signer.details.get("length_signature", 64)
             min_len = 8 + 32 + sig_length
             if len(peer_pub) < min_len:
@@ -145,6 +170,8 @@ class QuantumSafeKEX:
             return True
 
         except Exception as e:
+            self.failed_attempts += 1
+            self.last_failed_time = time.time()
             if not isinstance(e, (AuthenticationError, ReplayAttackError, SignatureVerificationError)):
                 await self._log_security_event("HIGH", "VERIFICATION_ERROR", f"Unexpected error during verification: {str(e)}")
             self.logger.error(f"Peer verification failed: {str(e)}")
@@ -177,7 +204,7 @@ class QuantumSafeKEX:
         return True
 
     async def exchange(self, peer_pub: bytes) -> Tuple[bytes, bytes]:
-        """
+     """
         ピアとの鍵交換を実行します。
         
         このメソッドは以下の処理を行います：
@@ -194,12 +221,17 @@ class QuantumSafeKEX:
             
         Raises:
             AuthenticationError: ピア検証に失敗した場合
+            HandshakeTimeoutError: ハンドシェイクがタイムアウトした場合
             その他の例外: 暗号操作中にエラーが発生した場合
         """
+     try:
+
+      async with asyncio.timeout(self.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30)):
+        #await asyncio.sleep(self.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30))
         if not await self.verify_peer(peer_pub):
-            await self._log_security_event("HIGH", "KEX_FAILURE", "Peer verification failed during exchange")
-            self.logger.warning("Peer verification failed during exchange.")
-            raise AuthenticationError("Peer verification failed during exchange.")
+             await self._log_security_event("HIGH", "KEX_FAILURE", "Peer verification failed during exchange")
+             self.logger.warning("Peer verification failed during exchange.")
+             raise AuthenticationError("Peer verification failed during exchange.")
 
         # 鍵使用回数を増やす
         self.key_usage_count += 1
@@ -220,17 +252,16 @@ class QuantumSafeKEX:
             
             # 格子ベースの暗号を使用したカプセル化
             ciphertext, pq_shared = self.kyber.encap_secret(pq_peer)
-            
+            # ロール情報を明示的に示す
+            # role_label = b"initiator" if self.is_initiator else b"responder"
+            # ec_parts = sorted([self.ec_priv_public_raw, ec_peer])
+            # pq_parts = sorted([self.public_key, pq_peer])
             # トランスクリプトの構築
-            transcript = self.ec_priv_public_raw + ec_peer + self.public_key + pq_peer
-            
-            # ソルトの生成
-            hasher = hashes.Hash(hashes.SHA512())
-            hasher.update(transcript)
-            salt = hasher.finalize()[:32]
+            transcript = self._build_transcript(ec_peer, pq_peer)
+            salt = self._generate_salt(transcript)
             
             # 最終的な共有秘密の導出
-            hkdf = HKDF(algorithm=hashes.SHA512(), length=32, salt=salt, info=b'hybrid-kex-v4')
+            hkdf = HKDF(algorithm=hashes.SHA512(), length=32, salt=salt, info=b'hybrid-kex-v5')
             shared_secret = hkdf.derive(ec_shared + pq_shared)
             #print(len(shared_secret))
 
@@ -243,7 +274,55 @@ class QuantumSafeKEX:
             await self._log_security_event("HIGH", "KEX_ERROR", f"Key exchange error: {str(e)}")
             self.logger.error(f"Key exchange failed: {str(e)}")
             raise
+     except asyncio.TimeoutError as e:
+            await self._log_security_event("HIGH", "HANDSHAKE_TIMEOUT", 
+                f"Handshake timed out after {self.config_manager.getint('timeouts', 'HANDSHAKE_TIMEOUT')} seconds")
+            raise HandshakeTimeoutError("Handshake process timed out") from e
+    async def decap(self, ciphertext: bytes, peer_pub: bytes) -> bytes:
+        """
+        受け取った暗号文とピアの公開鍵を使用して共有秘密鍵を復元します。
+        
+        Args:
+            ciphertext: 暗号化されたデータ
+            peer_pub: ピアの公開鍵データ
+            
+        Returns:
+            bytes: 復元された共有秘密鍵
+            
+        Raises:
+            その他の例外: 暗号操作中にエラーが発生した場合
+        """
+        try:
+            # 格子ベースの暗号を使用した復号化
+            pq_shared = self.kyber.decap_secret(ciphertext)
 
+            # EC部分の共有秘密を計算
+            ec_peer = peer_pub[8:40]
+            sig_length = self.signer.details.get("length_signature", 64)
+            pq_peer = peer_pub[40:-sig_length]
+
+            ec_peer_key = x25519.X25519PublicKey.from_public_bytes(ec_peer)
+            ec_shared = await asyncio.get_event_loop().run_in_executor(None, self.ec_priv.exchange, ec_peer_key)
+            #role_label = b"initiator" if self.is_initiator else b"responder"
+            # ec_parts = sorted([self.ec_priv_public_raw, ec_peer])
+            # pq_parts = sorted([self.public_key, pq_peer])
+            # トランスクリプトの構築
+            transcript = self._build_transcript(ec_peer, pq_peer)
+            salt = self._generate_salt(transcript)
+
+            # 最終的な共有秘密の導出
+            hkdf = HKDF(algorithm=hashes.SHA512(), length=32, salt=salt, info=b'hybrid-kex-v5')
+            shared_secret = hkdf.derive(ec_shared + pq_shared)
+
+            # 成功ログ
+            await self._log_security_event("LOW", "DECAP_SUCCESS", "Key decapsulation successful")
+            self.logger.info("Key decapsulation successful.")
+
+            return shared_secret
+        except Exception as e:
+            await self._log_security_event("HIGH", "DECAP_ERROR", f"Key decapsulation error: {str(e)}")
+            self.logger.error(f"Key decapsulation failed: {str(e)}")
+            raise
     async def _log_security_event(self, severity: str, event_type: str, details: str,):
         """
         セキュリティイベントをログに記録するヘルパーメソッドです。
@@ -264,7 +343,6 @@ class QuantumSafeKEX:
             {}
         )
         await self.enhanced_logger.log_security_event(event)
-
     def export_keys(self) -> Dict[str, str]:
         """
         現在の鍵の状態をエクスポートします。
@@ -339,7 +417,7 @@ class QuantumSafeKEX:
             ec_priv_public_raw=base64.b64decode(data['ec_public']),
             awa=base64.b64decode(data['awa']),
             sig_keypair=base64.b64decode(data['sig_public']),
-            config_manager=config
+      ec_pub_rawer=config
         )
         
         # 鍵の内部状態を調整
@@ -347,3 +425,19 @@ class QuantumSafeKEX:
         instance.signer = signer
         
         return instance
+
+    def _build_transcript(self, ec_peer, pq_peer):
+        ec_parts = sorted([self.ec_priv_public_raw, ec_peer])
+        pq_parts = sorted([self.public_key, pq_peer])
+        return (
+            b"hybrid-kex-v5" +
+            b"|ec_a:" + ec_parts[0] +
+            b"|ec_b:" + ec_parts[1] +
+            b"|pq_a:" + pq_parts[0] +
+            b"|pq_b:" + pq_parts[1]
+        )
+
+    def _generate_salt(self, transcript):
+        hasher = hashes.Hash(hashes.SHA512())
+        hasher.update(transcript)
+        return hasher.finalize()[:32]

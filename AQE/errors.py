@@ -84,9 +84,36 @@ class ProtocolError(SecurityError):
     プロトコルに関連するエラーを表すクラスです。
     プロトコルの仕様に違反した通信や操作が検出された場合に使用します。
     """
-    pass
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM, details: Dict[str, Any] = None):
+        """
+        ProtocolErrorを初期化します。
 
-class RateLimitExceeded(SecurityError):
+        Args:
+            message: エラーメッセージ
+            severity: エラーの重大度（デフォルトはMEDIUM）
+            details: エラーに関する詳細情報を含む辞書（オプション）
+        """
+        super().__init__(message, severity, details)
+
+
+class HandshakeTimeoutError(SecurityError):
+    """
+    ハンドシェイクタイムアウトエラーを表すクラスです。
+    ハンドシェイクプロセスがタイムアウトした場合に使用します。
+    """
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, details: Dict[str, Any] = None):
+        """
+        HandshakeTimeoutErrorを初期化します。
+        
+        Args:
+            message: エラーメッセージ
+            severity: エラーの重大度（デフォルトはHIGH）
+            details: エラーに関する詳細情報を含む辞書（オプション）
+        """
+        super().__init__(message, severity, details)
+        
+
+class RateLimitExceededError(SecurityError):
     """
     レート制限超過エラーを表すクラスです。
     短時間に多数のリクエストや操作が検出された場合に使用します。
@@ -94,7 +121,7 @@ class RateLimitExceeded(SecurityError):
     def __init__(self, message: str, attempts: int, max_attempts: int, window: int, 
                  severity: ErrorSeverity = ErrorSeverity.MEDIUM, details: Dict[str, Any] = None):
         """
-        RateLimitExceededを初期化します。
+        RateLimitExceededErrorを初期化します。
         
         Args:
             message: エラーメッセージ

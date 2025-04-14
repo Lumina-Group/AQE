@@ -84,6 +84,25 @@ class SecurityMetrics:
             if since <= 0:
                 return self.timeline
             return [e for e in self.timeline if e['timestamp'] > since]
+    async def update_metrics(self, metrics: Dict[str, int]):
+        """
+        メトリックを更新します。
+
+        Args:
+            metrics: 更新するメトリック名とその値の辞書
+
+        Returns:
+            なし
+        """
+        async with self._lock:
+            for metric_name, value in metrics.items():
+                self.metrics[metric_name] += value
+                self.timeline.append({
+                    'timestamp': time.time(),
+                    'metric': metric_name,
+                    'value': value
+                })
+                
 
     async def reset_metrics(self):
         """

@@ -19,24 +19,23 @@ class ConfigurationManager:
             "NOISE_PROTOCOL": "ChaCha20_Poly1305"
         },
         "security": {
-            "KEY_ROTATION_INTERVAL": "100",
+            "KEY_ROTATION_INTERVAL": "10",
             "KEY_ROTATION_TIME": "360",
             "MAX_KEY_CHAIN_LENGTH": "3",
             "MAX_MESSAGE_SIZE": "1024",
-            "TIMESTAMP_WINDOW": "300",
+            "TIMESTAMP_WINDOW": "30",
             "MAX_FAILED_ATTEMPTS": "5",
-            "RATE_LIMIT_WINDOW": "300",
+            "RATE_LIMIT_WINDOW": "30",
             "REPLAY_WINDOW_SIZE": "64",
-            "MESSAGE_MAX_AGE": "3600",
+            "MESSAGE_MAX_AGE": "360",
             "KEY_SIZE": "32"
         },
         "timeouts": {
             "HANDSHAKE_TIMEOUT": "30",
-            "CONNECTION_TIMEOUT": "300",
-            "CLEANUP_INTERVAL": "300"
+            "CONNECTION_TIMEOUT": "30",
+            "CLEANUP_INTERVAL": "30"
         },
         "keys": {
-            "KEY_FILE_PERMS": "600",
             "KEY_ROTATION_CHECK_INTERVAL": "60"
         },
         "performance": {

@@ -8,7 +8,7 @@ import struct
 from typing import Tuple
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from Cryptodome.Cipher import ChaCha20_Poly1305
+from Crypto.Cipher import ChaCha20_Poly1305
 from .errors import (
     ReplayAttackError,
     DecryptionError,
@@ -19,7 +19,7 @@ from .logger import EnhancedSecurityLogger, SecurityMetrics, setup_logging
 from .configuration import ConfigurationManager
 
 class SecureTransport:
-    def __init__(self, initial_key: bytes, config_manager: ConfigurationManager = None):
+    def __init__(self, initial_key: bytes, config_manager: ConfigurationManager = None, logger: EnhancedSecurityLogger = None):
         """
         安全な通信トランスポート層を初期化します。
         このクラスは暗号化、復号化、鍵の管理などを担当します。
@@ -32,15 +32,18 @@ class SecureTransport:
         
         Args:
             initial_key: 初期共有秘密鍵
-            config_manager: 設定を管理するConfigurationManagerのインスタンス。指定されていない場合は新しく生成されます。
+            config_manager: 設定を管理するConfigurationManagerのインスタンス。指定されていない場合は新しく生成されます。 
+            logger: 拡張されたセキュリティロガーのインスタンス。指定されていない場合は新しく生成されます。
             
         Returns:
             なし
         """
         self.config_manager = config_manager or ConfigurationManager()
-        
+        self.connection_timeout = self.config_manager.getint("timeouts", "CONNECTION_TIMEOUT", fallback=300)
+        self.cleanup_interval = self.config_manager.getint("timeouts", "CLEANUP_INTERVAL", fallback=300)
+        self.last_activity_time = time.time()
         # ログ設定
-        logger = setup_logging()
+        logger = logger or setup_logging()
         self.security_metrics = SecurityMetrics()
         self.logger = EnhancedSecurityLogger(logger, self.security_metrics).logger
         
@@ -87,7 +90,7 @@ class SecureTransport:
         self._nonce_cache_size = self.config_manager.getint("performance", "NONCE_CACHE_SIZE", fallback=1024)
         self._nonce_cache = set()
         
-        self.logger.info(f"SecureTransport initialized with key chain size {self.max_key_chain_length}")
+       # self.logger.info(f"SecureTransport initialized with key chain size {self.max_key_chain_length}")
 
     def _derive_key(self, key_material: bytes) -> Tuple[bytes, bytes]:
         """
@@ -122,35 +125,29 @@ class SecureTransport:
         
         return hkdf.derive(key_material), salt
 
-    async def rotate_key_if_needed(self) -> bool:
-        """
-        条件に応じて鍵をローテーションします。
-        
-        以下の条件のいずれかに当てはまる場合、鍵をローテーションします：
-        1. 現在の鍵の使用回数が設定された閾値を超えた場合
-        2. 現在の鍵が生成されてから設定された時間が経過した場合
-        
-        Returns:
-            bool: ローテーションが行われた場合はTrue、それ以外はFalse
-        """
-        current_key_data = self.key_chain[-1]
+    async def _check_key_rotation_needed(self) -> bool:
+        current_key_info = self.key_chain[-1]
         needs_rotation = False
-        
+
         # 使用回数による判断
-        if current_key_data['uses'] >= self.key_rotation_interval:
+        if current_key_info['uses'] >= self.key_rotation_interval:
             needs_rotation = True
-            self.logger.info(f"Key rotation triggered by usage count: {current_key_data['uses']}")
-        
+            self.logger.info(f"Key rotation triggered by usage count: {current_key_info['uses']}")
+
         # 経過時間による判断
-        elapsed_time = time.time() - current_key_data['created']
+        elapsed_time = time.time() - current_key_info['created']
         if elapsed_time >= self.key_rotation_time:
             needs_rotation = True
             self.logger.info(f"Key rotation triggered by time: {elapsed_time:.2f}s")
-            
-        if needs_rotation:
+
+        return needs_rotation
+
+    async def rotate_key_if_needed(self) -> bool:
+        if await self._check_key_rotation_needed():
             await self.rotate_key()
             return True
-        return False    
+        return False
+
     async def rotate_key(self):
         """
         鍵をローテーションします。
@@ -204,10 +201,12 @@ class SecureTransport:
         平文を暗号化します。
         
         ChaCha20-Poly1305アルゴリズムを使用し、以下の特徴を持ちます：
-        - 認証付き暗号化（AEAD）によるデータの完全性保護
-        - シーケンス番号とランダム値を組み合わせたノンス生成
-        - 追加認証データ（AAD）によるメタデータの保護
-        - メッセージサイズ制限による異常検知
+        - オートメーションキー管理 (AKE) をサポート
+        - キーローテーションを自動的に行う
+        - メッセージサイズの上限を設定可能
+        - ノンスをランダムに生成し、一意性を保証
+        - 追加認証データ (AAD) にシーケンス番号、キーID、タイムスタンプを含める
+        - キー使用回数を追跡し、一定回数使用された鍵をローテーション
         
         Args:
             plaintext: 暗号化する平文データ
@@ -220,6 +219,7 @@ class SecureTransport:
             ValueError: メッセージサイズが上限を超えた場合
             その他の例外: 暗号化処理中にエラーが発生した場合
         """
+        self.last_activity_time = time.time()
         # メッセージサイズチェック
         max_size = self.config_manager.getint("security", "MAX_MESSAGE_SIZE")
         if len(plaintext) > max_size:
@@ -289,10 +289,13 @@ class SecureTransport:
             
         Raises:
             DecryptionError: 復号に失敗した場合
-            ReplayAttackError: リプレイ攻撃を検出した場合
+            InvalidNonceError: 無効なノンスが検出された場合
+            AuthenticationTagMismatchError: 認証タグの不一致が検出された場合
+            ReplayAttackError: リプレイ攻撃が検出された場合
             その他の例外: 復号処理中にエラーが発生した場合
         """
         try:
+            self.last_activity_time = time.time()
             # JSONからデータ構造を解析
             data = json.loads(encrypted.decode())
             
@@ -337,7 +340,7 @@ class SecureTransport:
                 raise DecryptionError("AAD too short")
             
             seq = int.from_bytes(aad[:8], 'big')
-            timestamp = int.from_bytes(aad[10:18], 'big')
+            
             
             # シーケンス番号の検証
             if seq in self.sequence_window:
@@ -384,7 +387,40 @@ class SecureTransport:
             if isinstance(e, DecryptionError):
                 raise
             raise DecryptionError(f"Decryption error: {str(e)}") from e
-            
+    async def _check_connection_timeout(self):
+        """接続タイムアウトチェック"""
+        if time.time() - self.last_activity_time > self.connection_timeout:
+            self.logger.warning("Connection timeout, initiating cleanup")
+            await self._cleanup_resources()
+    async def _cleanup_resources(self):
+        """定期的なリソースクリーンアップ"""
+        # 鍵チェーンの古い鍵を削除
+        if len(self.key_chain) > self.max_key_chain_length:
+            removed_key = self.key_chain.pop(0)
+            self.logger.debug(f"Removed old key {removed_key['id']} from key chain")
+        # ノンスキャッシュの古いエントリを削除
+        if len(self._nonce_cache) > self._nonce_cache_size:
+            self._nonce_cache.clear()
+            self.logger.debug("Cleared nonce cache")
+        # シーケンスウィンドウの古いエントリを削除
+        if len(self.sequence_window) > self.window_size:
+            self.sequence_window.clear()
+            self.logger.debug("Cleared sequence window")
+        # 鍵同期状態の更新
+        if time.time() - self.key_sync_state['last_sync'] > self.cleanup_interval:
+            self.key_sync_state['last_sync'] = time.time()
+            self.logger.debug("Key sync state updated")
+        # セキュリティメトリクスの更新
+        self.security_metrics.update_metrics()
+        self.logger.debug("Security metrics updated")
+        # 定期的なクリーンアップのスケジュール
+        if self.cleanup_interval > 0:
+            self.logger.debug(f"Scheduling cleanup in {self.cleanup_interval} seconds")
+            time.sleep(self.cleanup_interval)
+            await self._cleanup_resources()
+        # 最後のアクティビティ時間を更新
+        self.last_activity_time = time.time()
+        self.logger.debug(f"Performing cleanup every {self.cleanup_interval} seconds")
     def export_key_state(self) -> dict:
         """
         現在の鍵状態をエクスポートする (バックアップまたは状態保存用)
@@ -467,3 +503,4 @@ class SecureTransport:
         
         instance.logger.info("SecureTransport restored from key state")
         return instance
+    

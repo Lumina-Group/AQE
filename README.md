@@ -1,133 +1,111 @@
-# AQE: Anti-Quantum Encryption
-**AQE** is a next-generation quantum-resistant encryption library designed for the post-quantum era. While conventional cryptographic libraries face the risk of being broken by quantum computers, AQE provides practical protection that is available right now.
+# AQE (Anti-Quantum Encryption)
 
-[日本語](/README_JA.md)
+[LICENSE](LICENSE)
 
----
+[日本語](README_JA.md)
 
-## 🚀 Key Features of AQE
+**AQE** is a next-generation encryption library designed for the quantum computing era. By combining traditional elliptic curve cryptography with cutting-edge lattice-based cryptography in a hybrid approach, it ensures security both now and in the future.
 
-| Feature                  | AQE                                | Conventional Encryption Libraries    | Other Post-Quantum Encryption Libraries |
-|--------------------------|------------------------------------|--------------------------------------|-----------------------------------------|
-| **Quantum Resistance**   | ✅ Complete hybrid protection      | ❌ Vulnerable to quantum attacks     | ⚠️ Partial protection                   |
-| **Performance**          | ✅ Optimized for practical use     | ✅ High-speed                        | ❌ Slow and cumbersome                  |
-| **Ease of Use**          | ✅ Simple API                      | ⚠️ Complex configuration required    | ❌ Experimental interfaces              |
-| **Hybrid Encryption**    | ✅ Combines existing techniques    | ❌ Traditional cryptography only     | ⚠️ Limited hybridization                |
-| **Automatic Key Management** | ✅ Supports key rotation and lifecycle management | ❌ Requires manual management | ⚠️ Basic management only           |
-| **Comprehensive Security**  | ✅ Multi-layer defense             | ⚠️ Algorithm-focused                 | ⚠️ Limited defenses                     |
+## ✨ Key Features
 
----
-
-## 🛡️ Quantum-Ready Protection
-
-```python
-# Generate quantum-resistant encryption in just a few lines
-kex = QuantumSafeKEX()
-transport = SecureTransport(await kex.exchange(peer_awa)[0])
-encrypted = await transport.encrypt(your_data)
-```
-
----
-
-## 🔑 Main Features
-
-- **Quantum-Resistant Encryption**: Implements NIST PQC final candidates (Kyber1024, Dilithium3).
-- **Hybrid Encryption**: Combines traditional ECC (X25519) with post-quantum cryptography.
-- **Automatic Key Management**: Configurable key rotation and management at set intervals.
-- **High-Speed Performance**: Efficient data protection via ChaCha20-Poly1305 encryption.
-- **Forward Secrecy**: Minimizes risk of key compromise through automatic key rotation.
-- **Robust Attack Protections**:
-  - Defense against timing attacks
-  - Side-channel resistance
+- **Quantum-resistant key exchange** - Robust key exchange using the Kyber algorithm
+- **Strong encryption** - Fast and secure encryption/decryption with ChaCha20-Poly1305
+- **Automatic key rotation** - Regular key updates for enhanced security
+- **Advanced protection features**
   - Replay attack prevention
-  - Tamper detection
+  - Sequence number verification
+  - Security event logging
+  - Comprehensive metrics tracking
 
----
-
-## 📊 Performance Design
-
-- **Efficient Key Exchange**: Hybrid method using Kyber1024 and X25519.
-- **Fast Encryption**: Efficient data protection with ChaCha20-Poly1305.
-- **Optimized Implementation**: Support for asynchronous operations in critical processes.
-
----
-
-## 💻 Installation
-
-### Requirements
-* Python 3.7+
-* liboqs - Open Quantum Safe library
-* pycryptodome
-* cryptography
+## 🔧 Installation
 
 ```bash
-# Install AQE
-pip install AQE
+pip install .
 ```
 
----
+### Dependencies
 
-## 🚦 Simple Usage Example
+| Package | Required Version |
+|---------|------------------|
+| cryptography | >=36.0.0 |
+| pycryptodome | >=3.14.0 |
+| configparser | >=5.3.0 |
+| asyncio | >=3.4.3 |
+| liboqs-python | >=0.7.0 |
+
+## 📘 Usage
+
+Here's a basic implementation example:
 
 ```python
 import asyncio
-from AQE.kex import QuantumSafeKEX
+from AQE import QuantumSafeKEX, ConfigurationManager
 from AQE.transport import SecureTransport
 
-async def secure_communication():
-    kex = QuantumSafeKEX()
-    transport = SecureTransport(await kex.exchange(peer_awa)[0])
-    encrypted = await transport.encrypt(b"Hello, Quantum World!")
-    decrypted = await transport.decrypt(encrypted)
-    print("Decrypted message:", decrypted)
+async def main():
+    # Initialize configuration manager
+    config_manager = ConfigurationManager('config.ini')
+    
+    # Initialize QuantumSafeKEX instances for Alice and Bob
+    alice_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=True)
+    bob_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=False)
+    
+    # Exchange public keys (mutual retrieval)
+    alice_awa = alice_kex.awa
+    bob_awa = bob_kex.awa
+    
+    # --- Key exchange process ---
+    # Alice generates ciphertext and shared secret (encap)
+    alice_shared_secret, ciphertext = await alice_kex.exchange(bob_awa)
+    
+    # Bob recovers shared secret using received ciphertext (decap)
+    bob_shared_secret = await bob_kex.decap(ciphertext, alice_awa)
+    
+    print(f"Bob's shared secret: {bob_shared_secret.hex()}")
+    print(f"Alice's shared secret: {alice_shared_secret.hex()}")
+    
+    # Verify secret keys match
+    if alice_shared_secret != bob_shared_secret:
+        raise ValueError("Shared secrets do not match!")
+    
+    # Initialize SecureTransport
+    alice_transport = SecureTransport(initial_key=alice_shared_secret, config_manager=config_manager)
+    bob_transport = SecureTransport(initial_key=bob_shared_secret, config_manager=config_manager)
+    
+    # --- Message encryption/decryption test ---
+    try:
+        message = b"Hello!"
+        encrypted_msg = await alice_transport.encrypt(message)
+        decrypted_by_bob = await bob_transport.decrypt(encrypted_msg)
+        
+        encrypted_msg2 = await alice_transport.encrypt(message)
+        decrypted_by_bob2 = await bob_transport.decrypt(encrypted_msg2)
+        
+        print(f"Decrypted message 1: {decrypted_by_bob.decode()}")
+        print(f"Decrypted message 2: {decrypted_by_bob2.decode()}")
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
-    asyncio.run(secure_communication())
+    asyncio.run(main())
 ```
 
----
+## ⚙️ Configuration
 
-## 🔧 Configuration Options
+Customize settings via the `config.ini` file:
 
-```ini
-[kex]
-KEX_ALG = Kyber1024  # NIST PQC final candidate
-EPHEMERAL_KEY_LIFETIME = 3600  # Rotate key every 1 hour
+## 📊 Security Logging and Metrics
 
-[signature]
-SIG_ALG = Dilithium3  # NIST PQC final candidate
-SIG_VERIFY_TIMEOUT = 5  # Prevent timing attacks
+AQE provides comprehensive security event logging and metrics tracking.
+See the `AQE/logger.py` module for implementation details.
 
-[security]
-KEY_ROTATION_INTERVAL = 1000  # Exchange key every 1000 messages
-TIMESTAMP_WINDOW = 300  # Prevent replay attacks (in seconds)
-```
+## 👥 Contribution
 
----
+We welcome contributions to this project!
 
-## 🏢 Industry Use Cases
+- If you find any bugs, please create an Issue
+- Pull requests for new features and improvements are welcome
 
-- **Finance**: Protect transactions with quantum-resistant protocols.
-- **Healthcare**: Secure patient data for the long term.
-- **Government Agencies**: Comply with post-quantum regulatory requirements.
-- **IoT**: Apply lightweight yet robust encryption techniques.
-- **Military/Defense**: Safeguard mission-critical systems.
+## 📜 License
 
----
-
-## 🤝 Commercial Support
-
-Commercial support for enterprises is also available.  
-For more details, please contact: `example.example.1.mm@icloud.com`.
-
----
-
-## 🤝 Contributions
-
-Contributions to the project are welcome.  
-Feel free to report issues, request features, or submit pull requests.
-
----
-
-## 📝 License
-Apache License 2.0 - For details, see [LICENSE](LICENSE).
+This project is licensed under the [Apache Software License](LICENSE).
