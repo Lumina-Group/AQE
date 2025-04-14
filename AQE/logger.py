@@ -38,7 +38,99 @@ class SecurityMetrics:
         self.timeline = []
         self._lock = asyncio.Lock()
         self.last_reset = time.time()
+    async def increment_expired_messages(self):
+        """
+        有効期限切れのメッセージ数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('expired_messages')
+    async def increment_successful_decryptions(self):
+        """
+        成功した復号操作の数をインクリメントします。
 
+        Returns:
+            なし
+        """
+        await self.increment_metric('successful_decryptions')
+    async def increment_decryption_failures(self):
+        """
+        復号操作の失敗数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('decryption_failures')
+    async def increment_encryption_failures(self):
+        """
+        暗号化操作の失敗数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('encryption_failures')
+    async def increment_encryption_successes(self):
+        """
+        成功した暗号化操作の数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('encryption_successes')
+    async def increment_key_exchange_failures(self):
+        """
+        鍵交換操作の失敗数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('key_exchange_failures')
+    async def increment_key_exchange_successes(self):
+        """
+        成功した鍵交換操作の数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('key_exchange_successes')
+    async def increment_signature_verification_failures(self):
+        """
+        署名検証操作の失敗数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('signature_verification_failures')
+    async def increment_signature_verification_successes(self):
+        """
+        成功した署名検証操作の数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('signature_verification_successes')
+    async def increment_authentication_failures(self):
+        """
+        認証操作の失敗数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('authentication_failures')
+    async def increment_authentication_successes(self):
+        """
+        成功した認証操作の数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('authentication_successes')
+    async def increment_replay_attacks(self):
+        """
+        リプレイ攻撃の発生数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('replay_attacks')
+    async def increment_security_events(self):
+        """
+        セキュリティイベントの発生数をインクリメントします。
+        Returns:
+            なし
+        """
+        await self.increment_metric('security_events')
+    
     async def increment_metric(self, metric_name: str, value: int = 1):
         """
         指定されたメトリックを増加させます。

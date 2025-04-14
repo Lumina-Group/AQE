@@ -15,12 +15,10 @@ from .configuration import ConfigurationManager
 from .errors import (
     SecurityError,
     AuthenticationError,
-    HandshakeTimeoutError,
     ProtocolError,
     RateLimitExceededError,
     DecryptionError,
     ReplayAttackError,
-    SignatureVerificationError,
     
 )
 

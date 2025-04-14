@@ -1,6 +1,7 @@
 import asyncio
 from AQE import QuantumSafeKEX, ConfigurationManager
 from AQE.transport import SecureTransport
+from AQE.errors import ReplayAttackError, DecryptionError, RateLimitExceededError
 
 async def perform_key_exchange(config_manager):
     """鍵交換処理をまとめた関数"""
@@ -22,9 +23,53 @@ async def perform_key_exchange(config_manager):
     print("🔁 Key has been rotated.")
     return alice_transport, bob_transport
 
+async def simulate_replay_attack(transport):
+    message = b"Replay Attack Test"
+    encrypted_msg = await transport.encrypt(message)
+    try:
+        # 同じメッセージを2回復号してリプレイ攻撃をシミュレート
+        await transport.decrypt(encrypted_msg)
+        await transport.decrypt(encrypted_msg)
+    except ReplayAttackError as e:
+        print(f"Replay attack detected: {e}")
+    else:
+        print("Replay attack was not detected.")
+
+async def simulate_decryption_error(transport):
+    message = b"Decryption Error Test"
+    encrypted_msg = await transport.encrypt(message)
+    # 暗号文を改ざんして復号エラーをシミュレート
+    tampered_msg = encrypted_msg[:-1] + b'X'
+    try:
+        await transport.decrypt(tampered_msg)
+    except DecryptionError as e:
+        print(f"Decryption error detected: {e}")
+    else:
+        print("Decryption error was not detected.")
+
+async def simulate_rate_limit(transport):
+    message = b"Rate Limit Test"
+    try:
+        # 短時間に大量のリクエストを送信してレート制限をシミュレート
+        tasks = [transport.encrypt(message) for _ in range(100)]
+        await asyncio.gather(*tasks)
+    except RateLimitExceededError as e:
+        print(f"Rate limit exceeded: {e}")
+    else:
+        print("Rate limit was not exceeded.")
+
 async def main():
     config_manager = ConfigurationManager('config.ini')
     alice_transport, bob_transport = await perform_key_exchange(config_manager)
+
+    print("\nTesting replay attack...")
+    await simulate_replay_attack(bob_transport)
+
+    print("\nTesting decryption error...")
+    await simulate_decryption_error(bob_transport)
+
+    print("\nTesting rate limit...")
+    await simulate_rate_limit(bob_transport)
 
     message = b"Hello!"
     count = 50

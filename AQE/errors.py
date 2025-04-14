@@ -30,21 +30,16 @@ class SecurityError(Exception):
         timestamp: エラー発生時のタイムスタンプ
         traceback: エラー発生時のスタックトレース
     """
-    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM, details: Dict[str, Any] = None):
-        """
-        SecurityErrorを初期化します。
-        
-        Args:
-            message: エラーメッセージ
-            severity: エラーの重大度（デフォルトはMEDIUM）
-            details: エラーに関する詳細情報を含む辞書（オプション）
-        """
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.MEDIUM, details: Dict[str, Any] = None, save_traceback: bool = False):
         super().__init__(message)
         self.message = message
         self.severity = severity
         self.details = details or {}
         self.timestamp = time.time()
-        self.traceback = traceback.format_exc()
+        if save_traceback:
+            self.traceback = traceback.format_exc()
+        else:
+            self.traceback = None
         
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -205,22 +200,6 @@ class SignatureVerificationError(AuthenticationError):
         Args:
             message: エラーメッセージ
             severity: エラーの重大度（デフォルトはCRITICAL）
-            details: エラーに関する詳細情報を含む辞書（オプション）
-        """
-        super().__init__(message, severity, details)
-
-class KeyRotationError(SecurityError):
-    """
-    鍵ローテーションエラーを表すクラスです。
-    暗号鍵のローテーション処理中にエラーが発生した場合に使用します。
-    """
-    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, details: Dict[str, Any] = None):
-        """
-        KeyRotationErrorを初期化します。
-        
-        Args:
-            message: エラーメッセージ
-            severity: エラーの重大度（デフォルトはHIGH）
             details: エラーに関する詳細情報を含む辞書（オプション）
         """
         super().__init__(message, severity, details)
