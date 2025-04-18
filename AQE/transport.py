@@ -112,7 +112,6 @@ class SecureTransport:
         except Exception as e:
             self.logger.error(f"Encryption error: {str(e)}")
             await self.security_metrics.increment_encryption_failures()
-            raise
 
     async def decrypt(self, encrypted: bytes) -> bytes:
         """

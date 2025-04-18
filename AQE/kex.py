@@ -89,7 +89,6 @@ class QuantumSafeKEX:
     async def verify_peer_awa(self, peer_awa: bytes) -> Tuple[bytes, bytes, bytes, bytes]:
         """
         ピアから受け取ったAWAを検証します。
-        AWAのローテーション機能は削除されたため、有効期間のチェックは行いませんが、
         タイムスタンプの妥当性（リプレイ攻撃対策）と署名を検証します。
 
         Args:
@@ -184,7 +183,6 @@ class QuantumSafeKEX:
     async def exchange(self, peer_awa: bytes) -> Tuple[bytes, bytes]:
         """
         ピアとの鍵交換を実行します。 AWAを受け取り、検証してから交換処理に進みます。
-        AWAローテーション機能は削除されています。
 
         このメソッドは以下の処理を行います：
         1. ピアのAWAを検証 (verify_peer_awa を使用)
@@ -352,10 +350,7 @@ class QuantumSafeKEX:
             time.time(),
             {}
         )
-        if self.enhanced_logger:
-            await self.enhanced_logger.log_security_event(event)
-        else:
-             self.logger.warning(f"Enhanced logger not available. Logging event: {severity} - {event_type} - {details}")
+        await self.enhanced_logger.log_security_event(event)
 
     def export_keys(self) -> Dict[str, str]:
         """
