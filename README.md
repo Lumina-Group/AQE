@@ -10,7 +10,6 @@
 
 - **Quantum-resistant key exchange** - Robust key exchange using the Kyber algorithm
 - **Strong encryption** - Fast and secure encryption/decryption with ChaCha20-Poly1305
-- **Automatic key rotation** - Regular key updates for enhanced security
 - **Advanced protection features**
   - Replay attack prevention
   - Sequence number verification
