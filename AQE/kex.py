@@ -1,15 +1,15 @@
 import time
 import base64
 import asyncio
+import os
 from typing import Tuple, Dict, Any
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from .errors import AuthenticationError, HandshakeTimeoutError, RateLimitExceededError, ReplayAttackError, SignatureVerificationError
+from .errors import AuthenticationError, HandshakeTimeoutError, RateLimitExceededError, ReplayAttackError,ConfigurationError, SignatureVerificationError
 from .logger import SecurityEvent, EnhancedSecurityLogger, SecurityMetrics, setup_logging
 from .configuration import ConfigurationManager
 from oqs import KeyEncapsulation, Signature
-
 class QuantumSafeKEX:
     def __init__(
         self,
@@ -25,7 +25,6 @@ class QuantumSafeKEX:
         """
         量子耐性のある鍵交換プロトコルの実装クラスを初期化します。
         ハイブリッド方式（古典的な楕円曲線と格子ベースの暗号）を使用します。
-        AWAのローテーション機能は削除されています。
 
         Args:
             identity_key: 既存のX25519秘密鍵。指定されていない場合は新しく生成されます。
@@ -40,6 +39,7 @@ class QuantumSafeKEX:
         Returns:
             なし
         """
+        self.hybrid_kex_ver = b"HybridKEXv1.0"
         self.config_manager = config_manager or ConfigurationManager()
         self.metrics = SecurityMetrics()
         self.enhanced_logger = logger or EnhancedSecurityLogger(setup_logging(), self.metrics)
@@ -71,7 +71,8 @@ class QuantumSafeKEX:
         - EC公開鍵：X25519公開鍵 (Raw)
         - PQ公開鍵：Kyber公開鍵
         - 署名公開鍵: 署名アルゴリズムの公開鍵
-        - 署名：署名秘密鍵で生成された署名（タイムスタンプ + EC公開鍵 + PQ公開鍵 + 署名公開鍵 を署名対象とする）
+        - Nonce: 乱数
+        - 署名：署名秘密鍵で生成された署名（タイムスタンプ + EC公開鍵 + PQ公開鍵 + 署名公開鍵 + Nonce を署名対象とする）
         Returns:
             bytes: 生成されたAWAバイト列
         """
@@ -79,14 +80,17 @@ class QuantumSafeKEX:
         ec_pub = self.ec_priv_public_raw
         pq_pub = self.public_key
         sig_pub = self.sig_keypair
+        nonce = os.urandom(16)
 
-        sig_data_payload = timestamp + ec_pub + pq_pub + sig_pub
+        sig_data_payload = timestamp + nonce + ec_pub + pq_pub + sig_pub
         signature = self.signer.sign(sig_data_payload)
 
         self.logger.info("AWA generated successfully.")
+
+        print(len(sig_data_payload + signature))
         return sig_data_payload + signature
 
-    async def verify_peer_awa(self, peer_awa: bytes) -> Tuple[bytes, bytes, bytes, bytes]:
+    async def verify_peer_awa(self, peer_awa: bytes) -> Tuple[bytes, bytes, bytes, bytes,bytes]:
         """
         ピアから受け取ったAWAを検証します。
         タイムスタンプの妥当性（リプレイ攻撃対策）と署名を検証します。
@@ -95,7 +99,7 @@ class QuantumSafeKEX:
             peer_awa: ピアから受け取ったAWAバイト列
 
         Returns:
-            Tuple[bytes, bytes, bytes, bytes]: 検証が成功した場合、(ピアのEC公開鍵, ピアのPQ公開鍵, ピアの署名公開鍵, ピアのAWAタイムスタンプ) のタプル
+            Tuple[bytes, bytes, bytes, bytes,bytes]: 検証が成功した場合、(ピアのEC公開鍵, ピアのPQ公開鍵, ピアの署名公開鍵, ピアのAWAタイムスタンプ,ピアのAWA乱数) のタプル
 
         Raises:
             AuthenticationError: 認証エラー（データ不完全、フォーマット不正など）が発生した場合
@@ -122,7 +126,7 @@ class QuantumSafeKEX:
             if not all([pq_pub_len, sig_pub_len, sig_len]):
                  raise ConfigurationError("Could not determine key/signature lengths from OQS details.")
 
-            min_len = 8 + ec_pub_len + pq_pub_len + sig_pub_len + sig_len
+            min_len = 8+ 16 + ec_pub_len + pq_pub_len + sig_pub_len + sig_len
             if len(peer_awa) < min_len:
                 await self._log_security_event("MEDIUM", "VERIFICATION_FAILED", f"Peer AWA data is incomplete. Expected min {min_len} bytes, got {len(peer_awa)}")
                 raise AuthenticationError(f"Peer AWA data is incomplete. Expected min {min_len} bytes.")
@@ -130,6 +134,8 @@ class QuantumSafeKEX:
             offset = 0
             timestamp_bytes = peer_awa[offset:offset+8]
             offset += 8
+            nonce_bytes = peer_awa[offset:offset+16]
+            offset += 16
             peer_ec_pub = peer_awa[offset:offset+ec_pub_len]
             offset += ec_pub_len
             peer_pq_pub = peer_awa[offset:offset+pq_pub_len]
@@ -147,7 +153,7 @@ class QuantumSafeKEX:
                 await self._log_security_event("MEDIUM", "REPLAY_ATTEMPT", f"AWA Timestamp {timestamp} outside allowed window (±{timestamp_window}s from {current_time:.0f})")
                 raise ReplayAttackError(f"Timestamp outside allowed window (±{timestamp_window}s).")
 
-            signed_data = timestamp_bytes + peer_ec_pub + peer_pq_pub + peer_sig_pub
+            signed_data = timestamp_bytes+nonce_bytes + peer_ec_pub + peer_pq_pub + peer_sig_pub
             try:
                 is_valid = self.signer.verify(signed_data, signature, peer_sig_pub)
             except Exception as e:
@@ -168,7 +174,7 @@ class QuantumSafeKEX:
             self.logger.info("Peer AWA verification successful.")
             self.failed_attempts = 0
             self.last_failed_time = 0
-            return peer_ec_pub, peer_pq_pub, peer_sig_pub, timestamp_bytes
+            return peer_ec_pub, peer_pq_pub, peer_sig_pub, timestamp_bytes,nonce_bytes
 
         except Exception as e:
             self.failed_attempts += 1
@@ -207,10 +213,10 @@ class QuantumSafeKEX:
         try:
             async with asyncio.timeout(self.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30)):
                 try:
-                    peer_ec_pub, peer_pq_pub, peer_sig_pub, _ = await self.verify_peer_awa(peer_awa)
+                    peer_ec_pub, peer_pq_pub, peer_sig_pub, _,__ = await self.verify_peer_awa(peer_awa)
                 except AuthenticationError as e:
                     self.logger.warning(f"Peer AWA verification failed during exchange: {e}")
-                    raise
+                   
 
                 try:
                     ec_peer_key = x25519.X25519PublicKey.from_public_bytes(peer_ec_pub)
@@ -239,7 +245,7 @@ class QuantumSafeKEX:
 
                 try:
                     key_size = self.config_manager.getint("kex", "DERIVED_KEY_SIZE", fallback=32)
-                    hkdf = HKDF(algorithm=hashes.SHA512(), length=key_size, salt=salt, info=b'hybrid-kex-v5')
+                    hkdf = HKDF(algorithm=hashes.SHA512(), length=key_size, salt=salt, info=self.hybrid_kex_ver)
                     shared_secret = hkdf.derive(ec_shared + pq_shared)
                 except Exception as e:
                     await self._log_security_event("HIGH", "KEX_ERROR", f"Final key derivation (HKDF) failed: {str(e)}")
@@ -286,7 +292,7 @@ class QuantumSafeKEX:
 
         try:
             try:
-                 peer_ec_pub, peer_pq_pub, peer_sig_pub, _ = await self.verify_peer_awa(peer_awa)
+                 peer_ec_pub, peer_pq_pub, peer_sig_pub, _ ,__= await self.verify_peer_awa(peer_awa)
             except AuthenticationError as e:
                  self.logger.warning(f"Peer AWA verification failed during decap: {e}")
                  raise
@@ -309,7 +315,7 @@ class QuantumSafeKEX:
 
             try:
                 key_size = self.config_manager.getint("kex", "DERIVED_KEY_SIZE", fallback=32)
-                hkdf = HKDF(algorithm=hashes.SHA512(), length=key_size, salt=salt, info=b'hybrid-kex-v5')
+                hkdf = HKDF(algorithm=hashes.SHA512(), length=key_size, salt=salt, info=self.hybrid_kex_ver)
                 shared_secret = hkdf.derive(ec_shared + pq_shared)
             except Exception as e:
                 await self._log_security_event("HIGH", "KEX_ERROR", f"Final key derivation (HKDF) failed during decap: {str(e)}")
@@ -352,11 +358,36 @@ class QuantumSafeKEX:
         )
         await self.enhanced_logger.log_security_event(event)
 
+    def _build_transcript(self, peer_ec_pub, peer_pq_pub, peer_sig_pub):
+        """KDFで使用するトランスクリプトを構築"""
+        if self.is_initiator:
+            ec_a, ec_b = self.ec_priv_public_raw, peer_ec_pub
+            pq_a, pq_b = self.public_key, peer_pq_pub
+            sig_a, sig_b = self.sig_keypair, peer_sig_pub
+        else:
+            ec_a, ec_b = peer_ec_pub, self.ec_priv_public_raw
+            pq_a, pq_b = peer_pq_pub, self.public_key
+            sig_a, sig_b = peer_sig_pub, self.sig_keypair
+
+        return (
+            b"hybrid-kex-v5" +
+            b"|initiator_ec:" + ec_a +
+            b"|responder_ec:" + ec_b +
+            b"|initiator_pq:" + pq_a +
+            b"|responder_pq:" + pq_b +
+            b"|initiator_sig:" + sig_a +
+            b"|responder_sig:" + sig_b
+        )
+
+    def _generate_salt(self, transcript):
+        """トランスクリプトからHKDF用のソルトを生成"""
+        hasher = hashes.Hash(hashes.SHA512())
+        hasher.update(transcript)
+        return hasher.finalize()
     def export_keys(self) -> Dict[str, str]:
         """
         現在の鍵の状態をエクスポートします。
         秘密鍵（EC、Kyber、署名）と公開鍵、AWAが含まれます。
-        AWAローテーションが削除されたため、関連する状態変数はエクスポートされません。
 
         エクスポートされる情報:
         - EC秘密鍵 (Raw)
@@ -467,30 +498,3 @@ class QuantumSafeKEX:
              temp_logger = logger.logger if logger else setup_logging()
              temp_logger.error(f"An unexpected error occurred during loading from keys: {e}")
              raise RuntimeError(f"An unexpected error occurred during loading from keys: {e}") from e
-
-    def _build_transcript(self, peer_ec_pub, peer_pq_pub, peer_sig_pub):
-        """KDFで使用するトランスクリプトを構築"""
-        if self.is_initiator:
-            ec_a, ec_b = self.ec_priv_public_raw, peer_ec_pub
-            pq_a, pq_b = self.public_key, peer_pq_pub
-            sig_a, sig_b = self.sig_keypair, peer_sig_pub
-        else:
-            ec_a, ec_b = peer_ec_pub, self.ec_priv_public_raw
-            pq_a, pq_b = peer_pq_pub, self.public_key
-            sig_a, sig_b = peer_sig_pub, self.sig_keypair
-
-        return (
-            b"hybrid-kex-v5" +
-            b"|initiator_ec:" + ec_a +
-            b"|responder_ec:" + ec_b +
-            b"|initiator_pq:" + pq_a +
-            b"|responder_pq:" + pq_b +
-            b"|initiator_sig:" + sig_a +
-            b"|responder_sig:" + sig_b
-        )
-
-    def _generate_salt(self, transcript):
-        """トランスクリプトからHKDF用のソルトを生成"""
-        hasher = hashes.Hash(hashes.SHA512())
-        hasher.update(transcript)
-        return hasher.finalize()

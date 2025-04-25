@@ -133,7 +133,21 @@ class RateLimitExceededError(SecurityError):
             'window_seconds': window
         })
         super().__init__(message, severity, details)
+class ConfigurationError(SecurityError):
+    """
+    設定エラーを表すクラスです。
+    システムの設定に問題がある場合に使用します。
+    """
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.CRITICAL, details: Dict[str, Any] = None):
+        """
+        ConfigurationErrorを初期化します。
 
+        Args:
+            message: エラーメッセージ
+            severity: エラーの重大度（デフォルトはCRITICAL）
+            details: エラーに関する詳細情報を含む辞書（オプション）
+        """
+        super().__init__(message, severity, details)
 class DecryptionError(SecurityError):
     """
     復号に関連するエラーを表すクラスです。

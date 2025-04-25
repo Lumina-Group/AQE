@@ -40,7 +40,8 @@ class SecureTransport:
         self.security_metrics = SecurityMetrics()
         self.logger = EnhancedSecurityLogger(logger, self.security_metrics).logger
 
-        self.current_key, self.current_salt = initial_key, None
+        self.current_key = initial_key
+        #, self.current_salt =
         self.key_id = hashlib.sha256(self.current_key).hexdigest()[:8]
 
         self.sequence = 0
@@ -53,7 +54,7 @@ class SecureTransport:
 
         self.last_timestamp = time.time()
 
-        self.logger.info(f"SecureTransport initialized with key ID {self.key_id}")
+        #self.logger.info(f"SecureTransport initialized with key ID {self.key_id}")
 
     async def encrypt(self, plaintext: bytes, context: bytes = None) -> bytes:
         """
@@ -255,7 +256,7 @@ class SecureTransport:
         """
         return {
             'key': base64.b64encode(self.current_key).decode(),
-            'salt': base64.b64encode(self.current_salt).decode() if self.current_salt else None,
+            # 'salt': base64.b64encode(self.current_salt).decode() if self.current_salt else None,
             'key_id': self.key_id,
             'sequence': self.sequence,
             'last_valid_seq': self.last_valid_seq,
@@ -276,7 +277,7 @@ class SecureTransport:
 
         try:
             instance.current_key = base64.b64decode(state['key'])
-            instance.current_salt = base64.b64decode(state['salt']) if state.get('salt') else None
+          #  instance.current_salt = base64.b64decode(state['salt']) if state.get('salt') else None
             instance.key_id = state.get('key_id', hashlib.sha256(instance.current_key).hexdigest()[:8])
         except (KeyError, TypeError, ValueError) as e:
             instance.logger.error(f"Failed to restore key state: {e}")

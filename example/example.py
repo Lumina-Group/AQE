@@ -38,6 +38,7 @@ async def main():
         encrypted_msg = await alice_transport.encrypt(message)
         print(f"[{i}] Encrypted message: {encrypted_msg}")
         decrypted_by_bob = await bob_transport.decrypt(encrypted_msg)
+        print(f"Alice`s export transport keys {alice_transport.export_key_state()}")
 
         await asyncio.sleep(1)
 

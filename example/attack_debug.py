@@ -29,7 +29,9 @@ async def simulate_replay_attack(transport):
     try:
         # 同じメッセージを2回復号してリプレイ攻撃をシミュレート
         await transport.decrypt(encrypted_msg)
+        print(f"Alice`s export transport keys {transport.export_key_state()}")
         await transport.decrypt(encrypted_msg)
+        print(f"Alice`s export transport keys {transport.export_key_state()}")
     except ReplayAttackError as e:
         print(f"Replay attack detected: {e}")
     else:

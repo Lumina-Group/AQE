@@ -5,10 +5,9 @@ AQE: 量子暗号 (Anti-Quantum Encryption)
 このパッケージは、量子コンピュータの脅威に対応した暗号機能を提供します。
 """
 
-__version__ = '0.2.2'
+__version__ = '0.2.4'
 __author__ = 'Meow'
 
-# 主要コンポーネントをインポートして公開
 from .kex import QuantumSafeKEX
 from .transport import SecureTransport
 from .configuration import ConfigurationManager
@@ -19,7 +18,8 @@ from .errors import (
     RateLimitExceededError,
     DecryptionError,
     ReplayAttackError,
-    
+    SignatureVerificationError,
+    HandshakeTimeoutError,
 )
 
 # 公開するシンボルを指定
