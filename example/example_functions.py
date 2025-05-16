@@ -3,7 +3,7 @@ from AQE import QuantumSafeKEX, ConfigurationManager
 from AQE.transport import SecureTransport
 
 async def main():
-    # 設定マネージャーの初期化
+    # AQE設定マネージャーの初期化
     config_manager = ConfigurationManager('config.ini')
 
     # Alice と Bob の QuantumSafeKEX インスタンスの初期化
@@ -43,7 +43,9 @@ async def main():
     try:
         message = b"Hello!"
         encrypted_msg = await alice_transport.encrypt(message)
+        print(f"Encrypted message: {encrypted_msg.hex()}")
         decrypted_by_bob = await bob_transport.decrypt(encrypted_msg)
+        print(f"Decrypted message: {decrypted_by_bob.decode()}")
 
         encrypted_msg2 = await alice_transport.encrypt(message)
         decrypted_by_bob2 = await bob_transport.decrypt(encrypted_msg2)

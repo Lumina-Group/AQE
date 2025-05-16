@@ -23,11 +23,11 @@ class ConfigurationManager:
             "MAX_MESSAGE_SIZE": "65536",
             "TIMESTAMP_WINDOW": "60",
             "MAX_FAILED_ATTEMPTS": "5",
-            "RATE_LIMIT_WINDOW": "300",
-            "SEQUENCE_WINDOW_SIZE": "1024",
+            "RATE_LIMIT_WINDOW": "30",
+            "SEQUENCE_WINDOW_SIZE": "10",
             "MESSAGE_MAX_AGE": "300",
             "KEY_SIZE": "32",
-            "NONCE_CACHE_SIZE": "1000"
+            "NONCE_CACHE_SIZE": "100"
         },
         "timeouts": {
             "HANDSHAKE_TIMEOUT": "30",
@@ -52,7 +52,7 @@ class ConfigurationManager:
         if os.path.exists(self.config_file):
             try:
                 self.config.read(self.config_file)
-                logging.info(f"Configuration loaded from {self.config_file}")
+                #logging.info(f"Configuration loaded from {self.config_file}")
             except configparser.Error as e:
                  logging.error(f"Error reading configuration file {self.config_file}: {e}. Using defaults.")
                  self.config = configparser.ConfigParser(interpolation=None)
@@ -290,3 +290,17 @@ class ConfigurationManager:
         except Exception as e:
              logging.error(f"Error getting boolean configuration for [{section}] {option}: {e}")
              raise
+    def set(self, section: str, option: str, value: str):
+        """
+        指定されたセクションとオプションに新しい値を設定します。
+        Args:
+            section (str): 設定のセクション名。
+            option (str): 設定のオプション名。
+            value (str): 設定する値。
+        """
+        if not self.config.has_section(section):
+            self.config.add_section(section)
+        self.config.set(section, option, value)
+        self._save_configuration()
+        logging.info(f"Configuration updated: [{section}] {option} = '{value}'")
+    

@@ -1,7 +1,7 @@
 import asyncio
 from AQE import QuantumSafeKEX, ConfigurationManager
 from AQE.transport import SecureTransport
-from AQE.errors import ReplayAttackError, DecryptionError, RateLimitExceededError
+from AQE.errors import ReplayAttackError, DecryptionError, RateLimitExceededError, SignatureVerificationError, HandshakeTimeoutError
 
 async def perform_key_exchange(config_manager):
     """鍵交換処理をまとめた関数"""
@@ -60,12 +60,40 @@ async def simulate_rate_limit(transport):
     else:
         print("Rate limit was not exceeded.")
 
+async def simulate_signature_verification_error(transport, kex):
+    """署名検証エラーをシミュレートする関数"""
+    try:
+        # 仮の改ざんされたAWAデータを作成
+        tampered_awa = kex.awa[:-1] + b'X'
+        await kex.verify_peer_awa(tampered_awa)
+    except SignatureVerificationError as e:
+        print(f"Signature verification error detected: {e}")
+    else:
+        print("Signature verification error was not detected.")
+
+async def simulate_handshake_timeout(kex):
+    """ハンドシェイクタイムアウトをシミュレートする関数"""
+    try:
+        # タイムアウトを強制的に短く設定
+        original_timeout = kex.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30)
+        kex.config_manager.set("timeouts", "HANDSHAKE_TIMEOUT", "1")
+        _, ciphertext = await kex.exchange(kex.awa)
+        #await kex.decap(ciphertext, kex.awa)
+        # 元のタイムアウト設定に戻す
+        kex.config_manager.set("timeouts", "HANDSHAKE_TIMEOUT", str(original_timeout))
+    except HandshakeTimeoutError as e:
+        print(f"Handshake timeout detected: {e}")
+    else:
+        print("Handshake timeout was not detected.")
+
 async def main():
     config_manager = ConfigurationManager('config.ini')
+    alice_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=True)
+    bob_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=False)
     alice_transport, bob_transport = await perform_key_exchange(config_manager)
 
-    print("\nTesting replay attack...")
-    await simulate_replay_attack(bob_transport)
+    #print("\nTesting replay attack...")
+    #await simulate_replay_attack(bob_transport)
 
     print("\nTesting decryption error...")
     await simulate_decryption_error(bob_transport)
@@ -73,26 +101,32 @@ async def main():
     print("\nTesting rate limit...")
     await simulate_rate_limit(bob_transport)
 
-    message = b"Hello!"
-    count = 50
-    rotate_interval = 10  # 鍵をローテーションする間隔
+    print("\nTesting signature verification error...")
+    await simulate_signature_verification_error(bob_transport, alice_kex)
 
-    for i in range(1, count + 1):
-        # 鍵ローテーション判定
-        if i % rotate_interval == 0:
-            alice_transport, bob_transport = await perform_key_exchange(config_manager)
+    print("\nTesting handshake timeout...")
+    await simulate_handshake_timeout(alice_kex)
 
-        encrypted_msg = await alice_transport.encrypt(message)
-        print(f"[{i}] Encrypted message: {encrypted_msg}")
-        decrypted_by_bob = await bob_transport.decrypt(encrypted_msg)
+    # message = b"Hello!"
+    # count = 50
+    # rotate_interval = 10  # 鍵をローテーションする間隔
 
-        await asyncio.sleep(1)
+    # for i in range(1, count + 1):
+    #     # 鍵ローテーション判定
+    #     if i % rotate_interval == 0:
+    #         alice_transport, bob_transport = await perform_key_exchange(config_manager)
 
-        encrypted_msg2 = await alice_transport.encrypt(message)
-        decrypted_by_bob2 = await bob_transport.decrypt(encrypted_msg2)
+    #     encrypted_msg = await alice_transport.encrypt(message)
+    #     print(f"[{i}] Encrypted message: {encrypted_msg}")
+    #     decrypted_by_bob = await bob_transport.decrypt(encrypted_msg)
 
-        print(f"[{i}] Decrypted message 1: {decrypted_by_bob.decode()}")
-        print(f"[{i}] Decrypted message 2: {decrypted_by_bob2.decode()}")
+    #     await asyncio.sleep(1)
+
+    #     encrypted_msg2 = await alice_transport.encrypt(message)
+    #     decrypted_by_bob2 = await bob_transport.decrypt(encrypted_msg2)
+
+    #     print(f"[{i}] Decrypted message 1: {decrypted_by_bob.decode()}")
+    #     print(f"[{i}] Decrypted message 2: {decrypted_by_bob2.decode()}")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -200,7 +200,21 @@ class ReplayAttackError(SecurityError):
             details['sequence'] = sequence
         super().__init__(message, severity, details)
 
-
+class CryptoOperationError(SecurityError):
+    """
+    暗号操作に関連するエラーを表すクラスです。
+    暗号化や復号の過程で発生したエラーに使用します。
+    """
+    def __init__(self, message: str, severity: ErrorSeverity = ErrorSeverity.HIGH, details: Dict[str, Any] = None):
+        """
+        CryptoOperationErrorを初期化します。
+        
+        Args:
+            message: エラーメッセージ
+            severity: エラーの重大度（デフォルトはHIGH）
+            details: エラーに関する詳細情報を含む辞書（オプション）
+        """
+        super().__init__(message, severity, details)
 class SignatureVerificationError(AuthenticationError):
     """
     署名検証エラーを表すクラスです。
