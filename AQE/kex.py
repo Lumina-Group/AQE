@@ -90,7 +90,7 @@ class QuantumSafeKEX:
             # self.kem (その中の self.kem.secret_key) はデカプセル化に使用されます。
             #self.logger.info(f"Generated new KEM keypair for {self.kex_alg_name}.")
 
-        # ポスト量子署名 (例: Dilithium)
+       
         self.sig_alg_name = self.config_manager.get("signature", "SIG_ALG", fallback="Dilithium3")
         if sig_keypair and len(sig_keypair) == 2:
             provided_pk, provided_sk = sig_keypair
@@ -453,12 +453,7 @@ class QuantumSafeKEX:
             self.logger.exception(msg)
             raise CryptoOperationError(f"Unexpected critical error in KEX decap: {e}") from e
 
-    async def _log_security_event(self, event: SecurityEvent):
-        """
-        セキュリティイベントをログに記録するヘルパーメソッドです。
-        EnhancedSecurityLoggerのメソッドを呼び出します。
-        """
-        await self.enhanced_logger.log_security_event(event)
+
 
 
     def _build_transcript(self, initiator_ec_pub: bytes, initiator_pq_pub: bytes, initiator_sig_pub: bytes,
@@ -486,7 +481,12 @@ class QuantumSafeKEX:
         hasher.update(transcript)
         return hasher.finalize()
         
-
+    async def _log_security_event(self, event: SecurityEvent):
+        """
+        セキュリティイベントをログに記録するヘルパーメソッドです。
+        EnhancedSecurityLoggerのメソッドを呼び出します。
+        """
+        await self.enhanced_logger.log_security_event(event)
 
     def export_keys(self) -> Dict[str, Optional[str]]:
         """

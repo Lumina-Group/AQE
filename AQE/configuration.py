@@ -16,9 +16,6 @@ class ConfigurationManager:
         "signature": {
             "SIG_ALG": "Dilithium3"
         },
-        "noise": {
-            "NOISE_PROTOCOL": "ChaCha20_Poly1305"
-        },
         "security": {
             "MAX_MESSAGE_SIZE": "65536",
             "TIMESTAMP_WINDOW": "60",
@@ -119,8 +116,6 @@ class ConfigurationManager:
              raise ValueError("kex.KEX_ALG must not be empty.")
         if not self.get("signature", "SIG_ALG"):
              raise ValueError("signature.SIG_ALG must not be empty.")
-        if not self.get("noise", "NOISE_PROTOCOL"):
-             raise ValueError("noise.NOISE_PROTOCOL must not be empty.")
 
     def get(self, section: str, option: str, fallback: str = None) -> str:
         """
