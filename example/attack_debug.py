@@ -71,14 +71,15 @@ async def simulate_signature_verification_error(transport, kex):
     else:
         print("Signature verification error was not detected.")
 
-async def simulate_handshake_timeout(kex):
+async def simulate_handshake_timeout(a_kex,kex):
     """ハンドシェイクタイムアウトをシミュレートする関数"""
     try:
         # タイムアウトを強制的に短く設定
         original_timeout = kex.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30)
         kex.config_manager.set("timeouts", "HANDSHAKE_TIMEOUT", "1")
-        _, ciphertext = await kex.exchange(kex.awa)
-        #await kex.decap(ciphertext, kex.awa)
+        await asyncio.sleep(2)  # タイムアウトを待つために少し待つ
+        _, ciphertext = await a_kex.exchange(kex.awa)
+        await kex.decap(ciphertext, a_kex.awa)
         # 元のタイムアウト設定に戻す
         kex.config_manager.set("timeouts", "HANDSHAKE_TIMEOUT", str(original_timeout))
     except HandshakeTimeoutError as e:
@@ -92,8 +93,8 @@ async def main():
     bob_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=False)
     alice_transport, bob_transport = await perform_key_exchange(config_manager)
 
-    #print("\nTesting replay attack...")
-    #await simulate_replay_attack(bob_transport)
+    # print("\nTesting replay attack...")
+    # await simulate_replay_attack(bob_transport)
 
     print("\nTesting decryption error...")
     await simulate_decryption_error(bob_transport)
@@ -105,7 +106,7 @@ async def main():
     await simulate_signature_verification_error(bob_transport, alice_kex)
 
     print("\nTesting handshake timeout...")
-    await simulate_handshake_timeout(alice_kex)
+    await simulate_handshake_timeout(alice_kex,bob_kex)
 
     # message = b"Hello!"
     # count = 50

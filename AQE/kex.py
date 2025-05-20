@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from .errors import AuthenticationError, HandshakeTimeoutError, RateLimitExceededError, ReplayAttackError,ConfigurationError, SignatureVerificationError,CryptoOperationError
 from .logger import SecurityEvent, EnhancedSecurityLogger, SecurityMetrics, setup_logging
 from .configuration import ConfigurationManager
-from oqs import KeyEncapsulation, Signature # Assuming oqs-python is installed
+from oqs import KeyEncapsulation, Signature
 
 class QuantumSafeKEX:
 
@@ -38,8 +38,8 @@ class QuantumSafeKEX:
         """
         self.PROTOCOl_VER = b"HybridKEXv1.0" # HKDF情報用のプロトコルバージョン
         self.config_manager = config_manager or ConfigurationManager()
-        self.metrics = SecurityMetrics() # SecurityMetricsが定義されていると仮定
-        self.enhanced_logger = logger or EnhancedSecurityLogger(setup_logging(), self.metrics)
+        self.security_metrics = SecurityMetrics()
+        self.enhanced_logger = logger or EnhancedSecurityLogger(setup_logging(), self.security_metrics)
         self.logger = self.enhanced_logger.logger
 
         self.max_failed_attempts = self.config_manager.getint("security", "MAX_FAILED_ATTEMPTS", fallback=5)
@@ -157,14 +157,14 @@ class QuantumSafeKEX:
 
     async def verify_peer_awa(self, peer_awa: bytes) -> Tuple[bytes, bytes, bytes, bytes, bytes]:
         """
-        ピアから受け取ったAWAを検証します。
+        ペアから受け取ったAWAを検証します。
         タイムスタンプの妥当性（リプレイ攻撃対策）と署名を検証します。
 
         Args:
-            peer_awa: ピアから受け取ったAWAバイト列
+            peer_awa: ペアから受け取ったAWAバイト列
 
         Returns:
-            Tuple[bytes, bytes, bytes, bytes, bytes]: 検証が成功した場合、(ピアのEC公開鍵, ピアのPQ公開鍵, ピアの署名公開鍵, ピアのAWAタイムスタンプ, ピアのAWA乱数) のタプル
+            Tuple[bytes, bytes, bytes, bytes, bytes]: 検証が成功した場合、(ペアのEC公開鍵, ペアのPQ公開鍵, ペアの署名公開鍵, ペアのAWAタイムスタンプ, ペアのAWA乱数) のタプル
 
         Raises:
             AuthenticationError: 認証エラー（データ不完全、フォーマット不正など）が発生した場合
@@ -188,15 +188,15 @@ class QuantumSafeKEX:
                 # self.last_failed_time は失敗時に更新されるので、ここではリセット不要
 
         try:
-            # KEM公開鍵の長さはピアのKEMアルゴリズムに依存します。ここでは、ピアが同じKEMアルゴリズムを使用すると仮定します。
+            # KEM公開鍵の長さはペアのKEMアルゴリズムに依存します。ここでは、ペアが同じKEMアルゴリズムを使用すると仮定します。
             # これは通常、プロトコルレベルで合意されるか、固定されます。
             # ここではローカルのkemインスタンスから長さを取得します。
             pq_pub_len_details = KeyEncapsulation(self.kex_alg_name).details # 一時的なインスタンスで詳細取得
             pq_pub_len = pq_pub_len_details.get("length_public_key")
 
 
-            # 署名公開鍵と署名の長さはピアの署名アルゴリズムに依存します。
-            # 重要: ここでは、ピアがこのインスタンスと同じ署名アルゴリズム(self.sig_alg_name)を使用すると仮定しています。
+            # 署名公開鍵と署名の長さはペアの署名アルゴリズムに依存します。
+            # 重要: ここでは、ペアがこのインスタンスと同じ署名アルゴリズム(self.sig_alg_name)を使用すると仮定しています。
             # より堅牢なプロトコルでは、AWAに署名アルゴリズム識別子を含めることがあります。
             sig_details_for_peer = Signature(self.sig_alg_name).details # 一時的なインスタンスで詳細取得
             sig_pub_len = sig_details_for_peer.get("length_public_key")
@@ -244,7 +244,7 @@ class QuantumSafeKEX:
             # 2. 署名検証
             signed_data = timestamp_bytes + nonce_bytes + peer_ec_pub + peer_pq_pub + peer_sig_pub
 
-            # ピアの署名アルゴリズムがローカル設定と同じ(self.sig_alg_name)であると仮定して検証用オブジェクトを作成します。
+            # ペアの署名アルゴリズムがローカル設定と同じ(self.sig_alg_name)であると仮定して検証用オブジェクトを作成します。
             # この仮定が正しくない場合、検証は失敗します。
             self.logger.debug(f"Attempting to verify peer AWA signature using algorithm {self.sig_alg_name} "
                               f"(derived from local configuration, assuming peer uses the same). "
@@ -253,6 +253,7 @@ class QuantumSafeKEX:
                 # 検証用に一時的な署名オブジェクトを作成。秘密鍵は不要。
                 peer_verifier = Signature(self.sig_alg_name)
                 is_valid = peer_verifier.verify(signed_data, signature, peer_sig_pub)
+                await self.security_metrics.increment_signature_verification_successes()
             except Exception as e: # 基盤となる暗号ライブラリからのエラーをキャッチ (例: oqs.Error, ValueError)
                 msg = f"Error during AWA signature verification with {self.sig_alg_name}: {str(e)}"
                 await self._log_security_event(SecurityEvent("HIGH", "SIGNATURE_VERIFICATION_ERROR", msg, current_time_float, {}))
@@ -282,10 +283,10 @@ class QuantumSafeKEX:
 
     async def exchange(self, peer_awa_bytes: bytes) -> Tuple[bytes, bytes]:
         """
-        (イニシエータロール) ピアとの鍵交換を実行します。ピアのAWAを受け取り、検証後、自身のKEM暗号文を生成します。
+        (イニシエータロール) ペアとの鍵交換を実行します。ペアのAWAを受け取り、検証後、自身のKEM暗号文を生成します。
 
         Args:
-            peer_awa_bytes: ピア(レスポンダ)から受け取ったAWAデータ
+            peer_awa_bytes: ペア(レスポンダ)から受け取ったAWAデータ
 
         Returns:
             Tuple[bytes, bytes]: (共有秘密鍵, 送信するKEM暗号文)のタプル
@@ -301,7 +302,7 @@ class QuantumSafeKEX:
 
         try:
             async with asyncio.timeout(self.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30)):
-                # 1. ピアのAWAを検証
+                # 1. ペアのAWAを検証
                 peer_ec_pub_raw, peer_pq_pub, peer_sig_pub, _, _ = await self.verify_peer_awa(peer_awa_bytes)
 
                 # 2. ECDH共有秘密
@@ -310,7 +311,7 @@ class QuantumSafeKEX:
                     ec_shared_secret = await asyncio.get_event_loop().run_in_executor(
                         None, self.ec_priv.exchange, peer_ec_public_key
                     )
-                except Exception as e: # cryptographyライブラリは様々な例外を出す可能性あり
+                except Exception as e:
                     msg = f"ECDH key exchange failed: {str(e)}"
                     await self._log_security_event(SecurityEvent("HIGH", "KEX_ERROR", msg, time.time(), {"detail": "ECDH phase"}))
                     raise CryptoOperationError(msg) from e
@@ -318,7 +319,7 @@ class QuantumSafeKEX:
                 # 3. PQC KEMカプセル化 (イニシエータがレスポンダのPQ公開鍵に対してカプセル化)
                 # カプセル化には一時的なKEMオブジェクトを使用 (self.kemは自身の秘密鍵で初期化されている場合があるため)
                 try:
-                    temp_encapsulator = KeyEncapsulation(self.kex_alg_name) # ピアの公開鍵に対してカプセル化
+                    temp_encapsulator = KeyEncapsulation(self.kex_alg_name) # ペアの公開鍵に対してカプセル化
                     kem_ciphertext, pq_shared_secret = temp_encapsulator.encap_secret(peer_pq_pub)
                 except Exception as e: # oqs.Errorなど
                     msg = f"KEM encapsulation ({self.kex_alg_name}) failed: {str(e)}"
@@ -328,7 +329,7 @@ class QuantumSafeKEX:
                 # 4. HKDFを使用して秘密を結合
                 transcript = self._build_transcript(
                     self.ec_public_raw, self.kyber_public_key, self.sig_public_key, # 自身の鍵
-                    peer_ec_pub_raw, peer_pq_pub, peer_sig_pub                      # ピアの鍵
+                    peer_ec_pub_raw, peer_pq_pub, peer_sig_pub                      # ペアの鍵
                 )
                 salt = self._generate_salt(transcript)
 
@@ -346,7 +347,7 @@ class QuantumSafeKEX:
                     await self._log_security_event(SecurityEvent("HIGH", "KEX_ERROR", msg, time.time(), {"detail": "HKDF derivation"}))
                     raise CryptoOperationError(msg) from e
 
-                await self._log_security_event(SecurityEvent("LOW", "KEX_SUCCESS", "Initiator key exchange successful", time.time(), {}))
+                #await self._log_security_event(SecurityEvent("LOW", "KEX_SUCCESS", "Initiator key exchange successful", time.time(), {}))
                 self.logger.info("Initiator key exchange successful.")
                 return final_shared_secret, kem_ciphertext
 
@@ -354,21 +355,24 @@ class QuantumSafeKEX:
             timeout_val = self.config_manager.getint('timeouts', 'HANDSHAKE_TIMEOUT', fallback=30)
             msg = f"Handshake timed out after {timeout_val} seconds during initiator exchange."
             await self._log_security_event(SecurityEvent("HIGH", "HANDSHAKE_TIMEOUT", msg, time.time(), {}))
+
             raise HandshakeTimeoutError(msg) from None
         except (AuthenticationError, SignatureVerificationError, ReplayAttackError, RateLimitExceededError, CryptoOperationError) as e:
             # これらはverify_peer_awaまたはこのメソッド内の暗号操作によってログ記録済みの可能性あり
+
             self.logger.warning(f"Key exchange failed for initiator: {type(e).__name__} - {str(e)}")
             raise
         except Exception as e:
             msg = f"Unexpected error during initiator key exchange: {str(e)}"
             await self._log_security_event(SecurityEvent("CRITICAL", "KEX_UNEXPECTED_ERROR", msg, time.time(), {}))
+            await self.security_metrics.increment_key_exchange_successes()
             self.logger.exception(msg)
             raise CryptoOperationError(f"Unexpected critical error in KEX: {e}") from e
 
 
     async def decap(self, kem_ciphertext: bytes, peer_awa_bytes: bytes) -> bytes:
         """
-        (レスポンダロール) 受け取ったKEM暗号文とピアのAWAを使用して共有秘密鍵を復元します。
+        (レスポンダロール) 受け取ったKEM暗号文とペアのAWAを使用して共有秘密鍵を復元します。
 
         Args:
             kem_ciphertext: イニシエータから受け取ったKEM暗号文
@@ -387,7 +391,7 @@ class QuantumSafeKEX:
 
         try:
             async with asyncio.timeout(self.config_manager.getint("timeouts", "HANDSHAKE_TIMEOUT", fallback=30)):
-                # 1. ピアのAWAを検証
+                # 1. ペアのAWAを検証
                 peer_ec_pub_raw, peer_pq_pub, peer_sig_pub, _, _ = await self.verify_peer_awa(peer_awa_bytes)
 
                 # 2. ECDH共有秘密
@@ -416,7 +420,7 @@ class QuantumSafeKEX:
 
                 # 4. HKDFを使用して秘密を結合
                 transcript = self._build_transcript(
-                    peer_ec_pub_raw, peer_pq_pub, peer_sig_pub,                      # ピアの (イニシエータの) 鍵
+                    peer_ec_pub_raw, peer_pq_pub, peer_sig_pub,                      # ペアの (イニシエータの) 鍵
                     self.ec_public_raw, self.kyber_public_key, self.sig_public_key   # 自身の (レスポンダの) 鍵
                 )
                 salt = self._generate_salt(transcript)
@@ -435,7 +439,7 @@ class QuantumSafeKEX:
                     await self._log_security_event(SecurityEvent("HIGH", "KEX_ERROR", msg, time.time(), {"detail": "HKDF derivation decap"}))
                     raise CryptoOperationError(msg) from e
 
-                await self._log_security_event(SecurityEvent("LOW", "DECAP_SUCCESS", "Responder key decapsulation and derivation successful", time.time(), {}))
+                #await self._log_security_event(SecurityEvent("LOW", "DECAP_SUCCESS", "Responder key decapsulation and derivation successful", time.time(), {}))
                 self.logger.info("Responder key decapsulation and derivation successful.")
                 return final_shared_secret
 

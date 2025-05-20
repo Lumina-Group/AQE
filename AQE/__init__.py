@@ -1,5 +1,5 @@
 """
-AQE: 量子暗号 (Anti-Quantum Encryption)
+AQE: 対量子ハイブリッド暗号 (Anti-Quantum Encryption)
 ポスト量子時代のための次世代暗号ライブラリ
 
 このパッケージは、量子コンピュータの脅威に対応した暗号機能を提供します。

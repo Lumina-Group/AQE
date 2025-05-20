@@ -109,6 +109,7 @@ class SecureTransport:
                 'tag': base64.b64encode(tag).decode('utf-8'),
                 'timestamp': int(time.time())
             }
+            await self.security_metrics.increment_encryption_successes()
             return json.dumps(message).encode('utf-8')
         except Exception as e:
             self.logger.error(f"Encryption error: {str(e)}", exc_info=True)
@@ -151,6 +152,7 @@ class SecureTransport:
             cipher.update(aad_received)
             plaintext = cipher.decrypt_and_verify(ciphertext, tag)
             self.logger.debug(f"Message decrypted successfully. Sequence: {received_seq}")
+            await self.security_metrics.increment_successful_decryptions()
             return plaintext
         except ValueError as e:
             await self.security_metrics.increment_decryption_failures()

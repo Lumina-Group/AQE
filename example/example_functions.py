@@ -43,7 +43,7 @@ async def main():
     try:
         message = b"Hello!"
         encrypted_msg = await alice_transport.encrypt(message)
-        print(f"Encrypted message: {encrypted_msg.hex()}")
+        print(f"Encrypted message: {encrypted_msg}")
         decrypted_by_bob = await bob_transport.decrypt(encrypted_msg)
         print(f"Decrypted message: {decrypted_by_bob.decode()}")
 

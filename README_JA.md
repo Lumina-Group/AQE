@@ -1,4 +1,4 @@
-# AQE (Anti-Quantum Encryption) - 量子耐性ハイブリッド暗号ライブラリ
+# AQE (Anti-Quantum Encryption) - 対量子ハイブリッド暗号ライブラリ
 
 [![ライセンス](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Pythonバージョン](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
@@ -89,6 +89,38 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+また、QuantumSafeKEXクラスのみを利用して秘密鍵生成として利用することも可能です。：
+```python
+import asyncio
+from AQE import QuantumSafeKEX, ConfigurationManager
+from AQE.transport import SecureTransport
+
+async def main():
+    # 設定マネージャーの初期化
+    config_manager = ConfigurationManager('config.ini')
+    
+    # AliceとBobのQuantumSafeKEXインスタンスを初期化
+    alice_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=True)
+    bob_kex = QuantumSafeKEX(config_manager=config_manager, is_initiator=False)
+    
+    # 公開鍵の交換（相互取得）
+    alice_awa = alice_kex.awa
+    bob_awa = bob_kex.awa
+    
+    # --- 鍵交換プロセス ---
+    # Aliceが暗号文と共有秘密を生成（encap）
+    alice_shared_secret, ciphertext = await alice_kex.exchange(bob_awa)
+    
+    # Bobが受信した暗号文から共有秘密を復元（decap）
+    bob_shared_secret = await bob_kex.decap(ciphertext, alice_awa)
+    
+    print(f"Bobの共有秘密: {bob_shared_secret.hex()}")
+    print(f"Aliceの共有秘密: {alice_shared_secret.hex()}")
+    
+    # 秘密鍵が一致することを確認
+    if alice_shared_secret != bob_shared_secret:
+        raise ValueError("共有秘密が一致しません！")
 ```
 
 ## ⚙️ 設定
