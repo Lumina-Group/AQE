@@ -1,11 +1,10 @@
-
-[日本語](README_JA.md)
-
 # AQE (Anti-Quantum Encryption) - Quantum-Resistant Hybrid Encryption Library
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/dependencies-see%20below-orange)](README.md#-dependencies)
+
+[日本語](README_JA.md)
 
 **AQE** is a next-generation encryption library designed for the quantum computing era. It combines traditional elliptic curve cryptography with cutting-edge lattice-based cryptography in a hybrid approach to ensure security both now and in the future.
 
