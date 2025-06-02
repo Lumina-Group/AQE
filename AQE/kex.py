@@ -46,7 +46,7 @@ class QuantumSafeKEX:
         self.rate_limit_window = self.config_manager.getint("security", "RATE_LIMIT_WINDOW", fallback=300)
         self.is_initiator = is_initiator
         self.failed_attempts = 0
-        self.last_failed_time = 0.0 # float型で初期化
+        self.last_failed_time = 0.0
 
         # 古典的なKEX部分 (X25519)
         self.ec_priv = identity_key or x25519.X25519PrivateKey.generate()
@@ -120,7 +120,7 @@ class QuantumSafeKEX:
             # generate_keypair()後、self.signer.public_key と self.signer.secret_key が設定されます。
             #self.logger.info(f"Generated new Signature keypair for {self.sig_alg_name}.")
 
-        self.awa = self._generate_awa() # 認証とホワイトリストアサーション
+        self.awa = self._generate_awa()
 
         #self.logger.info(f"QuantumSafeKEX initialized. KEX Alg: {self.kem.details['name']}, SIG Alg: {self.signer.details['name']}, Initiator: {self.is_initiator}")
 
@@ -197,7 +197,6 @@ class QuantumSafeKEX:
 
             # 署名公開鍵と署名の長さはペアの署名アルゴリズムに依存します。
             # 重要: ここでは、ペアがこのインスタンスと同じ署名アルゴリズム(self.sig_alg_name)を使用すると仮定しています。
-            # より堅牢なプロトコルでは、AWAに署名アルゴリズム識別子を含めることがあります。
             sig_details_for_peer = Signature(self.sig_alg_name).details # 一時的なインスタンスで詳細取得
             sig_pub_len = sig_details_for_peer.get("length_public_key")
             sig_len = sig_details_for_peer.get("length_signature")
@@ -465,7 +464,6 @@ class QuantumSafeKEX:
         """
         KDFで使用するトランスクリプトを構築します。
         鍵交換に関与したすべての公開鍵情報を含み、役割（イニシエータ/レスポンダ）に基づいて順序付けられます。
-        これにより、両当事者が同じトランスクリプトを計算できるようになります。
         """
         # 鍵が何らかの形で同一であるか、互いの部分文字列である場合の曖昧さを防ぐためのラベル
         return (
@@ -550,7 +548,5 @@ class QuantumSafeKEX:
 
         except Exception as e:
             self.logger.error(f"Failed to export keys: {str(e)}", exc_info=True)
-            # 部分的に入力された辞書を返すか、エラーを発生させます
-            # # 収集された内容を返しますが、ログには失敗が記録されます。
             raise ConfigurationError(f"Key export failed: {e}") from e
 
