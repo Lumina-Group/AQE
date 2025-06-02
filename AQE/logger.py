@@ -1,55 +1,63 @@
 import logging
 import asyncio
 import time
+import os
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, Any
-from .errors import ErrorSeverity
+from typing import Dict, Any, List, Optional
+
+class ErrorSeverity:
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 class SecurityEvent:
-    def __init__(self, severity, event_type, details, timestamp, metadata=None):
-        """
-        セキュリティイベントを表すクラスを初期化します。
-        
-        このクラスはセキュリティに関連するイベントを表現し、ログや分析のために使用されます。
-        
-        Args:
-            severity: イベントの重大度（ErrorSeverityの値または文字列）
-            event_type: イベントの種類を示す識別子
-            details: イベントの詳細説明
-            timestamp: イベント発生時のタイムスタンプ
-            metadata: イベントに関する追加メタデータ（オプション）
-        """
-        self.severity = severity if isinstance(severity, ErrorSeverity) else getattr(ErrorSeverity, severity)
+    def __init__(
+        self,
+        severity: Any,
+        event_type: str,
+        details: str,
+        timestamp: float,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        if isinstance(severity, str):
+            try:
+                self.severity = getattr(ErrorSeverity, severity.upper())
+            except AttributeError:
+                logging.getLogger("AQE").warning(
+                    f"Unknown severity '{severity}' specified, using MEDIUM."
+                )
+                self.severity = ErrorSeverity.MEDIUM
+        else:
+            self.severity = severity
+
         self.event_type = event_type
         self.details = details
         self.timestamp = timestamp
         self.metadata = metadata or {}
 
 class SecurityMetrics:
-    def __init__(self):
-        """
-        セキュリティメトリクスクラスを初期化します。
-        
-        このクラスはセキュリティ関連のメトリクスを追跡し、統計情報を提供します。
-        スレッドセーフな操作のために非同期ロックを使用します。
-        """
-        self.metrics = defaultdict(int)
-        self.timeline = []
+    def __init__(self, metrics_log_file: str = "security_metrics.log"):
+        self.metrics: Dict[str, int] = defaultdict(int)
+        self.timeline: List[Dict[str, Any]] = []
         self._lock = asyncio.Lock()
-        self.last_reset = time.time()
+        self.last_reset: float = time.time()
+        self.metrics_log_file = metrics_log_file
 
-    async def increment_metric(self, metric_name: str, value: int = 1):
-        """
-        指定されたメトリックを増加させます。
-        
-        Args:
-            metric_name: 増加させるメトリックの名前
-            value: 増加させる値（デフォルト: 1）
+        if not os.path.exists(self.metrics_log_file):
+            with open(self.metrics_log_file, "w") as f:
+                f.write(f"{datetime.now()}: Metrics log initialized")
+
+    async def _log_metric_update(self, metric_name: str, value: int):
+        log_entry = f"\n{datetime.now()}: {metric_name} += {value} (Total: {self.metrics[metric_name]})"
+    
+        def write_log():
+         with open(self.metrics_log_file, "a") as f:
+            f.write(log_entry)
             
-        Returns:
-            なし
-        """
+        await asyncio.to_thread(write_log)
+    async def increment_metric(self, metric_name: str, value: int = 1):
         async with self._lock:
             self.metrics[metric_name] += value
             self.timeline.append({
@@ -57,165 +65,147 @@ class SecurityMetrics:
                 'metric': metric_name,
                 'value': value
             })
+            await self._log_metric_update(metric_name, value)
+
+    async def increment_expired_messages(self):
+        await self.increment_metric('expired_messages'.upper())
+
+    async def increment_successful_decryptions(self):
+        await self.increment_metric('successful_decryptions'.upper())
+
+    async def increment_decryption_failures(self):
+        await self.increment_metric('decryption_failures'.upper())
+
+    async def increment_encryption_failures(self):
+        await self.increment_metric('encryption_failures'.upper())
+
+    async def increment_encryption_successes(self):
+        await self.increment_metric('encryption_successes'.upper())
+
+
+    async def increment_key_exchange_successes(self):
+        await self.increment_metric('key_exchange_successes'.upper())
+    # async def increment_signature_verification_failures(self):
+    #     await self.increment_metric('signature_verification_failures'.upper())
+
+    async def increment_signature_verification_successes(self):
+        await self.increment_metric('signature_verification_successes'.upper())
+
+    # async def increment_authentication_failures(self):
+    #     await self.increment_metric('authentication_failures'.upper())
+
+    # async def increment_authentication_successes(self):
+    #     await self.increment_metric('authentication_successes'.upper())
+
+    # async def increment_replay_attacks(self):
+    #     await self.increment_metric('replay_attacks'.upper())
+
+    # async def increment_security_events(self):
+    #     await self.increment_metric('security_events'.upper())
 
     async def get_metrics(self) -> Dict[str, int]:
-        """
-        現在のメトリックを取得します。
-        
-        Returns:
-            Dict[str, int]: メトリック名とその値の辞書
-        """
         async with self._lock:
             return dict(self.metrics)
 
-    async def get_timeline(self, since: float = 0) -> list:
-        """
-        タイムライン情報を取得します。
-        特定の時間以降のイベントのみをフィルタリングできます。
-        
-        Args:
-            since: この時間以降のイベントのみを返す（Unixタイムスタンプ）。
-                  0以下の値を指定すると、すべてのイベントが返されます。
-            
-        Returns:
-            list: タイムラインイベントのリスト
-        """
+    async def get_timeline(self, since: float = 0) -> List[Dict[str, Any]]:
         async with self._lock:
-            if since <= 0:
-                return self.timeline
-            return [e for e in self.timeline if e['timestamp'] > since]
-    async def update_metrics(self, metrics: Dict[str, int]):
-        """
-        メトリックを更新します。
-
-        Args:
-            metrics: 更新するメトリック名とその値の辞書
-
-        Returns:
-            なし
-        """
-        async with self._lock:
-            for metric_name, value in metrics.items():
-                self.metrics[metric_name] += value
-                self.timeline.append({
-                    'timestamp': time.time(),
-                    'metric': metric_name,
-                    'value': value
-                })
-                
+            return [
+                e for e in self.timeline
+                if since <= 0 or e['timestamp'] > since
+            ]
 
     async def reset_metrics(self):
-        """
-        メトリックをリセットします。
-        すべてのメトリック値とタイムラインをクリアし、last_resetタイムスタンプを更新します。
-        
-        Returns:
-            なし
-        """
         async with self._lock:
             self.metrics.clear()
-            self.timeline = []
+            self.timeline.clear()
             self.last_reset = time.time()
 
 class EnhancedSecurityLogger:
     def __init__(self, logger: logging.Logger, metrics: SecurityMetrics):
-        """
-        拡張セキュリティロガークラスを初期化します。
-        
-        このクラスは標準のロギングと統計メトリクス追跡を組み合わせ、
-        セキュリティイベントの包括的な記録と分析を提供します。
-        
-        Args:
-            logger: 使用するロガーインスタンス
-            metrics: セキュリティメトリクスを記録するためのSecurityMetricsインスタンス
-        """
         self.logger = logger
         self.metrics = metrics
 
     async def log_security_event(self, event: SecurityEvent):
-        """
-        セキュリティイベントをログに記録し、メトリックを更新します。
-        
-        Args:
-            event: ログに記録するSecurityEventインスタンス
-            
-        Returns:
-            なし
-        """
-        await self.metrics.increment_metric(f"{event.severity.value}_{event.event_type}")
-        log_func = {
+        metric_key = f"{event.severity}_{event.event_type}"
+        await self.metrics.increment_metric(metric_key)
+
+        log_levels = {
             ErrorSeverity.LOW: self.logger.info,
             ErrorSeverity.MEDIUM: self.logger.warning,
             ErrorSeverity.HIGH: self.logger.error,
             ErrorSeverity.CRITICAL: self.logger.critical
-        }[event.severity]
+        }
+        
+        log_func = log_levels.get(event.severity, self.logger.warning)
+        log_message = (
+            f"Security Event [{event.severity}]: "
+            f"{event.event_type} - {event.details}"
+        )
+
         log_func(
-            f"Security Event [{event.severity.value}]: {event.event_type} - {event.details}",
+            log_message,
             extra={
                 "timestamp": datetime.fromtimestamp(event.timestamp).isoformat(),
                 "metadata": event.metadata
             }
         )
+
         if event.severity == ErrorSeverity.CRITICAL:
             await self._handle_critical_event(event)
 
     async def _handle_critical_event(self, event: SecurityEvent):
-        """
-        クリティカルなセキュリティイベントを処理します。
-        
-        Args:
-            event: 処理するクリティカルなSecurityEventインスタンス
-            
-        Returns:
-            なし
-        """
-        # 管理者に通知などの処理を実装可能
-        pass
+        self.logger.critical(
+            "CRITICAL EVENT RESPONSE INITIATED",
+            extra={"event_details": event.details}
+        )
 
     async def get_metrics_summary(self) -> Dict[str, Any]:
-        """
-        メトリックのサマリーを取得します。
-        
-        Returns:
-            Dict[str, Any]: メトリックサマリーを含む辞書
-        """
         metrics = await self.metrics.get_metrics()
-        return {
+        summary: Dict[str, Any] = {
             'total_events': sum(metrics.values()),
-            'by_severity': {
-                severity.value: sum(v for k, v in metrics.items() if k.startswith(severity.value))
-                for severity in ErrorSeverity
-            },
-            'by_type': {
-                k.split('_', 1)[1]: v for k, v in metrics.items() if '_' in k
-            },
-            'last_reset': self.metrics.last_reset
+            'by_severity': defaultdict(int),
+            'by_type': defaultdict(int),
+            'last_reset': datetime.fromtimestamp(self.metrics.last_reset).isoformat()
         }
 
-def setup_logging(log_level: str = "INFO", log_file: str = "quantum_secure_comm.log") -> logging.Logger:
-    """
-    ロギングシステムの設定を行います。
+        for metric, count in metrics.items():
+            if '_' in metric:
+                severity, _, event_type = metric.partition('_')
+                summary['by_severity'][severity] += count
+                summary['by_type'][event_type] += count
+            else:
+                summary['by_type'][metric] += count
+
+        return summary
+
+def setup_logging(
+    log_level: str = "INFO",
+    log_file: str = "quantum_secure_comm.log"
+) -> logging.Logger:
+    logger = logging.getLogger("AQE")
+    logger.propagate = False
     
-    ファイルとコンソールの両方にログを出力するロガーを設定します。
-    
-    Args:
-        log_level: ロギングレベル（デフォルト: "INFO"）
-        log_file: ログファイルのパス（デフォルト: "quantum_secure_comm.log"）
-        
-    Returns:
-        logging.Logger: 設定されたロガーインスタンス
-    """
-    logger = logging.getLogger("QuantumSecureComm")
-    logger.setLevel(getattr(logging, log_level))
-    
-    # ファイルハンドラの設定
-    fh = logging.FileHandler(log_file)
-    fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(fh)
-    
-    # コンソールハンドラの設定
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
-    logger.addHandler(ch)
-    
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    logger.setLevel(numeric_level)
+
+    # formatter = logging.Formatter(
+    #     '%(asctime)s - %(name)s - %(levelname)s - %(message)s - Context: %(extra)s',
+    #     defaults={'extra': 'N/A'}
+    # )
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    try:
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        logging.error(f"File handler error: {str(e)}")
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
     return logger
