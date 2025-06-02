@@ -24,7 +24,7 @@
 ## 🚀 Installation
 
 ```bash
-pip install AQE
+pip install .
 ```
 
 ### Dependencies
