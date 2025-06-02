@@ -21,7 +21,7 @@
 ## 🚀 インストール
 
 ```bash
-pip install AQE
+pip install .
 ```
 
 ### 依存関係
