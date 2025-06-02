@@ -32,7 +32,7 @@ pip install AQE
 | pycryptodome | >=3.14.0 |
 | configparser | >=5.3.0 |
 | asyncio | >=3.4.3 |
-| liboqs-python | >=0.7.0 |
+| [liboqs-python](https://github.com/open-quantum-safe/liboqs-python) | >=0.7.0 |
 
 ## 📚 基本的な使い方
 
