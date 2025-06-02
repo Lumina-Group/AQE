@@ -6,7 +6,7 @@ AQE: 対量子ハイブリッド暗号 (Anti-Quantum Encryption)
 """
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning) #liboqsとlioqs-pythonのバージョン齟齬による警告を非表示する。
-__version__ = '0.2.0'
+__version__ = '0.1.0'
 __author__ = 'Meow'
 
 # --- モジュールからのインポート ---
