@@ -95,6 +95,7 @@ if __name__ == "__main__":
 
 ## ⚙️ Configuration
 
+AQE can be customized via a `config.ini` file. If this file is not present, default settings will be used. The `ConfigurationManager` will load defaults into memory without creating the file if it's missing.
 Customize settings in the `config.ini` file:
 
 ```ini
@@ -111,6 +112,10 @@ nonce_size = 12
 connection_timeout = 300
 sequence_window_size = 100
 replay_cache_size = 1000
+
+[logging]
+LOG_TIMESTAMPS = true
+ENABLE_SECURITY_METRICS_LOG = true
 ```
 
 ## 🔒 Security Architecture
@@ -130,7 +135,7 @@ AQE employs a two-layer security architecture:
 ## 📊 Security Logging and Metrics
 
 AQE provides comprehensive security event logging and metrics tracking.
-See the `AQE/logger.py` module for details.
+See the `AQE/logger.py` module for details. Key aspects, such as timestamp inclusion in general logs and the generation of a separate security metrics log file, can be controlled through settings in `config.ini` (see Configuration section).
 
 ## 🤝 Contributing
 
