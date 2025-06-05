@@ -30,6 +30,10 @@ class ConfigurationManager:
             "HANDSHAKE_TIMEOUT": "30",
             "CONNECTION_TIMEOUT": "300",
             "CLEANUP_INTERVAL": "300"
+        },
+        "logging": {
+            "LOG_TIMESTAMPS": "true",
+            "ENABLE_SECURITY_METRICS_LOG": "true"
         }
     }
 
@@ -42,25 +46,70 @@ class ConfigurationManager:
         """
         self.config_file = config_file
         self.config = configparser.ConfigParser(interpolation=None)
+        self._config_file_existed = os.path.exists(self.config_file)
         self._load_configuration()
 
-    def _load_configuration(self):
-        """設定ファイルを読み込み、存在しない場合はデフォルト設定で作成・保存します。"""
-        if os.path.exists(self.config_file):
-            try:
-                self.config.read(self.config_file)
-                #logging.info(f"Configuration loaded from {self.config_file}")
-            except configparser.Error as e:
-                 logging.error(f"Error reading configuration file {self.config_file}: {e}. Using defaults.")
-                 self.config = configparser.ConfigParser(interpolation=None)
-                 self._apply_defaults_and_save()
-        else:
-            logging.warning(f"Configuration file {self.config_file} not found. Creating with default settings.")
-            self._apply_defaults_and_save()
-
-        needs_save = False
+    def _load_defaults(self):
+        """Populates self.config with DEFAULT_CONFIG."""
         for section, options in self.DEFAULT_CONFIG.items():
             if not self.config.has_section(section):
+                self.config.add_section(section)
+            for option, value in options.items():
+                if not self.config.has_option(section, option) or self.config.get(section, option) != value:
+                    self.config.set(section, option, value)
+
+    def _load_configuration(self):
+        """設定ファイルを読み込みます。存在しない場合はメモリ内でデフォルトを使用します。"""
+        needs_save = False
+        if self._config_file_existed:
+            try:
+                self.config.read(self.config_file)
+                # logging.info(f"Configuration loaded from {self.config_file}")
+            except configparser.Error as e:
+                 logging.error(f"Error reading configuration file {self.config_file}: {e}. Using defaults and attempting to repair.")
+                 self.config = configparser.ConfigParser(interpolation=None) # Reset corrupted config
+                 self._load_defaults()
+                 needs_save = True # Mark for saving after repair
+        else:
+            logging.warning(f"Configuration file {self.config_file} not found. Using default settings in memory. No file will be created unless configuration is explicitly saved via 'set'.")
+            self._load_defaults()
+            # Do not set needs_save = True here, as we don't want to create the file
+
+        # Apply defaults for missing sections/options if the file existed
+        if self._config_file_existed:
+            for section, options in self.DEFAULT_CONFIG.items():
+                if not self.config.has_section(section):
+                    self.config.add_section(section)
+                    needs_save = True
+                    logging.info(f"Added default section '{section}' to in-memory configuration.")
+                for option, value in options.items():
+                    if not self.config.has_option(section, option):
+                        self.config.set(section, option, value)
+                        needs_save = True
+                        logging.info(f"Added default option '{section}.{option}' = '{value}' to in-memory configuration.")
+        # If the file did not exist, defaults are already loaded by _load_defaults(),
+        # and we don't want to trigger a save that would create the file.
+
+        try:
+            self._validate_configuration()
+        except ValueError as e:
+             logging.error(f"Configuration validation failed: {e}. Check your config file (if it exists): {self.config_file} or the default settings.")
+             raise
+
+        if needs_save and self._config_file_existed:
+            self._save_configuration()
+
+    # This method is no longer needed as its logic is integrated elsewhere or handled differently.
+    # def _apply_defaults_and_save(self):
+    #      """デフォルト設定を適用し、ファイルに保存します。"""
+    #      for section, options in self.DEFAULT_CONFIG.items():
+    #          if not self.config.has_section(section):
+    #              self.config.add_section(section)
+    #          for option, value in options.items():
+    #              self.config.set(section, option, value)
+    #      self._save_configuration()
+
+    def _save_configuration(self):
                 self.config.add_section(section)
                 needs_save = True
                 logging.info(f"Added default section '{section}' to configuration.")
@@ -76,17 +125,19 @@ class ConfigurationManager:
              logging.error(f"Configuration validation failed: {e}. Check your config file: {self.config_file}")
              raise
 
-        if needs_save:
-            self._save_configuration()
+        # The save logic is now conditional within _load_configuration
+        # if needs_save and self._config_file_existed:
+        #     self._save_configuration()
 
-    def _apply_defaults_and_save(self):
-         """デフォルト設定を適用し、ファイルに保存します。"""
-         for section, options in self.DEFAULT_CONFIG.items():
-             if not self.config.has_section(section):
-                 self.config.add_section(section)
-             for option, value in options.items():
-                 self.config.set(section, option, value)
-         self._save_configuration()
+    # This method is no longer needed as its logic is integrated elsewhere or handled differently.
+    # def _apply_defaults_and_save(self):
+    #      """デフォルト設定を適用し、ファイルに保存します。"""
+    #      for section, options in self.DEFAULT_CONFIG.items():
+    #          if not self.config.has_section(section):
+    #              self.config.add_section(section)
+    #          for option, value in options.items():
+    #              self.config.set(section, option, value)
+    #      self._save_configuration()
 
     def _save_configuration(self):
         """現在の設定をファイルに書き込みます。"""
@@ -296,6 +347,9 @@ class ConfigurationManager:
         if not self.config.has_section(section):
             self.config.add_section(section)
         self.config.set(section, option, value)
-        self._save_configuration()
-        logging.info(f"Configuration updated: [{section}] {option} = '{value}'")
+        if self._config_file_existed:
+            self._save_configuration()
+            logging.info(f"Configuration updated and saved: [{section}] {option} = '{value}' to {self.config_file}")
+        else:
+            logging.info(f"In-memory configuration updated: [{section}] {option} = '{value}'. File {self.config_file} was not found initially and will not be created by this 'set' operation.")
     

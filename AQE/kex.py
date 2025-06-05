@@ -38,8 +38,9 @@ class QuantumSafeKEX:
         """
         self.PROTOCOl_VER = b"HybridKEXv1.0" # HKDF情報用のプロトコルバージョン
         self.config_manager = config_manager or ConfigurationManager()
-        self.security_metrics = SecurityMetrics()
-        self.enhanced_logger = logger or EnhancedSecurityLogger(setup_logging(), self.security_metrics)
+        self.security_metrics = SecurityMetrics(config_manager=self.config_manager) # Pass config_manager
+        _base_logger = setup_logging(config_manager=self.config_manager) # Pass config_manager
+        self.enhanced_logger = logger or EnhancedSecurityLogger(_base_logger, self.security_metrics)
         self.logger = self.enhanced_logger.logger
 
         self.max_failed_attempts = self.config_manager.getint("security", "MAX_FAILED_ATTEMPTS", fallback=5)
