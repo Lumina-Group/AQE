@@ -1,4 +1,5 @@
 import logging
+from AQE.configuration import ConfigurationManager # Added import
 import asyncio
 import time
 import os
@@ -38,25 +39,49 @@ class SecurityEvent:
         self.metadata = metadata or {}
 
 class SecurityMetrics:
-    def __init__(self, metrics_log_file: str = "security_metrics.log"):
+    def __init__(self, config_manager: ConfigurationManager, metrics_log_file: str = "security_metrics.log"):
+        self.config_manager = config_manager
         self.metrics: Dict[str, int] = defaultdict(int)
         self.timeline: List[Dict[str, Any]] = []
         self._lock = asyncio.Lock()
         self.last_reset: float = time.time()
-        self.metrics_log_file = metrics_log_file
+        self.metrics_log_file = metrics_log_file # Store original name
 
-        if not os.path.exists(self.metrics_log_file):
-            with open(self.metrics_log_file, "w") as f:
-                f.write(f"{datetime.now()}: Metrics log initialized")
+        self._logging_enabled = self.config_manager.getboolean('logging', 'ENABLE_SECURITY_METRICS_LOG', fallback=True)
+
+        if self._logging_enabled:
+            # Ensure directory exists if metrics_log_file includes a path
+            log_dir = os.path.dirname(self.metrics_log_file)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir) # Create directory if it doesn't exist
+
+            if not os.path.exists(self.metrics_log_file):
+                with open(self.metrics_log_file, "w") as f:
+                    f.write(f"{datetime.now()}: Metrics log initialized\n") # Added newline
+            else:
+                # Optional: Log an append marker if the file already exists
+                with open(self.metrics_log_file, "a") as f:
+                    f.write(f"{datetime.now()}: Metrics logging session started\n") # Added newline
+        else:
+            self.metrics_log_file = None # Logging is disabled
 
     async def _log_metric_update(self, metric_name: str, value: int):
-        log_entry = f"\n{datetime.now()}: {metric_name} += {value} (Total: {self.metrics[metric_name]})"
-    
+        if not self._logging_enabled or not self.metrics_log_file:
+            return # Don't log if disabled
+
+        log_entry = f"{datetime.now()}: {metric_name} += {value} (Total: {self.metrics[metric_name]})\n" # Added newline
+
         def write_log():
-         with open(self.metrics_log_file, "a") as f:
-            f.write(log_entry)
-            
+            try:
+                with open(self.metrics_log_file, "a") as f: # type: ignore
+                    f.write(log_entry)
+            except Exception as e:
+                # Log to main logger if SecurityMetrics logging fails
+                main_logger = logging.getLogger("AQE")
+                main_logger.error(f"Failed to write to security_metrics.log: {e}")
+
         await asyncio.to_thread(write_log)
+
     async def increment_metric(self, metric_name: str, value: int = 1):
         async with self._lock:
             self.metrics[metric_name] += value
@@ -179,6 +204,7 @@ class EnhancedSecurityLogger:
         return summary
 
 def setup_logging(
+    config_manager: ConfigurationManager, # Added config_manager
     log_level: str = "INFO",
     log_file: str = "quantum_secure_comm.log"
 ) -> logging.Logger:
@@ -191,13 +217,17 @@ def setup_logging(
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
     logger.setLevel(numeric_level)
 
-    # formatter = logging.Formatter(
-    #     '%(asctime)s - %(name)s - %(levelname)s - %(message)s - Context: %(extra)s',
-    #     defaults={'extra': 'N/A'}
-    # )
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # Retrieve timestamp preference
+    log_timestamps = config_manager.getboolean('logging', 'LOG_TIMESTAMPS', fallback=True)
+
+    # Define formatter_string based on log_timestamps
+    if log_timestamps:
+        formatter_string = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    else:
+        formatter_string = '%(name)s - %(levelname)s - %(message)s'
+
+    formatter = logging.Formatter(formatter_string) # Use dynamic formatter_string
+
     try:
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setFormatter(formatter)

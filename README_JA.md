@@ -125,6 +125,7 @@ async def main():
 
 ## ⚙️ 設定
 
+AQEは`config.ini`ファイルを通じてカスタマイズ可能です。このファイルが存在しない場合、デフォルト設定が使用されます。`ConfigurationManager`は、ファイルが見つからない場合、ファイルを作成せずにデフォルト設定をメモリに読み込みます。
 `config.ini`ファイルで設定をカスタマイズできます：
 
 ```ini
@@ -141,6 +142,10 @@ nonce_size = 12
 connection_timeout = 300
 sequence_window_size = 100
 replay_cache_size = 1000
+
+[logging]
+LOG_TIMESTAMPS = true
+ENABLE_SECURITY_METRICS_LOG = true
 ```
 
 ## 🔒 セキュリティアーキテクチャ
@@ -160,7 +165,7 @@ AQEは2層のセキュリティアーキテクチャを採用しています：
 ## 📊 セキュリティロギングとメトリクス
 
 AQEは包括的なセキュリティイベントロギングとメトリクス追跡機能を提供します。
-詳細は`AQE/logger.py`モジュールを参照してください。
+詳細は`AQE/logger.py`モジュールを参照してください。主要な側面、例えば一般ログへのタイムスタンプの包含や、別のセキュリティメトリクスログファイルの生成などは、`config.ini`の設定（設定セクションを参照）を通じて制御できます。
 
 ## 🤝 貢献
 

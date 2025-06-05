@@ -38,8 +38,9 @@ class SecureTransport:
         self.last_activity_time = time.time()
 
     
-        self.security_metrics = SecurityMetrics()
-        self.enhanced_logger = logger or EnhancedSecurityLogger(setup_logging(), self.security_metrics)
+        self.security_metrics = SecurityMetrics(config_manager=self.config_manager)
+        _base_logger = setup_logging(config_manager=self.config_manager) # Pass config_manager
+        self.enhanced_logger = logger or EnhancedSecurityLogger(_base_logger, self.security_metrics)
         self.logger = self.enhanced_logger.logger
 
         self.current_key = initial_key
@@ -415,8 +416,10 @@ class SecureTransport:
         instance = cls.__new__(cls)
         instance.config_manager = config_manager or ConfigurationManager()
 
-        instance.security_metrics = SecurityMetrics()
-        instance.logger = EnhancedSecurityLogger(self.logger, instance.security_metrics).logger
+        instance.security_metrics = SecurityMetrics(config_manager=instance.config_manager) # Pass config_manager
+        _base_logger = setup_logging(config_manager=instance.config_manager) # Pass config_manager
+        instance.enhanced_logger = EnhancedSecurityLogger(_base_logger, instance.security_metrics)
+        instance.logger = instance.enhanced_logger.logger
 
         try:
             instance.current_key = base64.b64decode(state['key'])
