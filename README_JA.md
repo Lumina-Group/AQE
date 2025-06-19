@@ -4,6 +4,8 @@
 [![Pythonバージョン](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
 [![依存関係](https://img.shields.io/badge/dependencies-see%20below-orange)](README.md#-dependencies)
 
+[English](README.md)
+
 **AQE**は量子コンピュータ時代に対応した次世代暗号ライブラリです。従来の楕円曲線暗号と最先端の格子ベース暗号をハイブリッド方式で組み合わせ、現在および将来にわたるセキュリティを確保します。
 
 ## 🌟 主要特徴
@@ -37,6 +39,8 @@ pip install .
 ## 📚 基本的な使い方
 
 以下は基本的な実装例です：
+
+より詳しい使用例は [docs/USAGE_JA.md](docs/USAGE_JA.md) を参照してください。
 
 ```python
 import asyncio
